@@ -202,5 +202,5 @@ ax.set_xlim(0,15)
 
 plt.tight_layout()
 #plt.subplots_adjust(wspace=0.1, hspace=0.1)
-plt.savefig(ext+'.pdf', bbox_inches='tight')
+plt.savefig('../plots/'+ext+'.pdf', bbox_inches='tight')
 plt.show()
