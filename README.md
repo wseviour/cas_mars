@@ -43,10 +43,10 @@ A typical filename from swbob output (and other files derived from this output) 
 
 Here's what it all means:
 
-`res_test` : name of the type of run. I called it this when I was testing different resolutions, should probably update to something more descriptive.
-`57.-70.` : inner and outer latitudes of the initial annular vortex
-`nu4-urlx` : doesn't change among runs
-`kt0.0` : relaxation parameter. In this case, 0 relaxation. A relaxation parameter 4.0 would mean a timescale of 0.25 days (i.e. kt = 1/t_relax).
-`c-0020`: angular frequency of the tropography
-`sat200.0`: maximum topography amplitude
-`T85`: spectral resolution
+* `res_test` : name of the type of run. I called it this when I was testing different resolutions, should probably update to something more descriptive.
+* `57.-70.` : inner and outer latitudes of the initial annular vortex
+* `nu4-urlx` : doesn't change among runs
+* `kt0.0` : relaxation parameter. In this case, 0 relaxation. A relaxation parameter 4.0 would mean a timescale of 0.25 days (i.e. kt = 1/t_relax).
+* `c-0020`: angular frequency of the tropography
+* `sat200.0`: maximum topography amplitude
+* `T85`: spectral resolution
