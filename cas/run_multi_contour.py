@@ -6,6 +6,9 @@ day = 200
 
 cons = sorted([os.path.basename(x) for x in glob.glob("input_contours/pv*%s*.in" % ext)])
 
+if not os.path.isdir('cas_output'):
+    os.system("mkdir cas_output")
+
 for icon in cons:
     print "**** %s ****" % icon
     os.system("rm -r winds")

@@ -1,2 +1,4 @@
 model_output/*
+!model_output/.gitkeep
 cas/cas_output/*
+!cas_output/.gitkeep
