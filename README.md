@@ -26,7 +26,7 @@ First try compiling the contour advection code. In directory `cas`, run `gfortra
 
 * `python/` : python scripts for making inputs for CA code and plotting outputs
   * `interpolate_winds.py` : produces the wind input files for the CA code (found in `../model_output/winds_*`)
-  * `make_contour.py` : makes input contours for CA code
+  * `make_contour.py` : makes input contours for CA code. Note the length of the CA calculation is determined by the number in the contour file header (currently set to 50 time steps (i.e. 25 days)).
   * `make_netCDF.py` : produces a netCDF file of q, u, and v from swbob binary output
   * `plot_cas_multicontour.py`: plots results of CA code (as in `../plots/` directory)
   * `plot_pv.py` : produces quick plots of PV for checking output of swbob runs
