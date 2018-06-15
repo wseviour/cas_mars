@@ -1,0 +1,17 @@
+#ifndef PARAMS_H_
+#define PARAMS_H_
+
+#if 0
+#define MPI 1
+#define LAM_MPI 1
+#endif
+
+#define P_NODE 4
+#define M_NODE 4
+
+#define PLON   64
+#define PLEV   1
+
+#define MAX_NUM_LONS 1
+
+#endif

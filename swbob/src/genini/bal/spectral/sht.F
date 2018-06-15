@@ -1,0 +1,14 @@
+      subroutine sht()
+      implicit none
+
+#include <fields.h>
+#include <mpcluster.h>
+#include <timer.h>
+
+      call fourier(sfc,phy,nlt,afc)                  ! sfc -> afc
+      call transpf(afc,afcx,abuflen,M_NODE,P_NODE)   !...transpose afc->afcx
+      call spectral(afcx,sfcx)                       ! afcx -> sfcx
+      call transpb(sfcx,sfc,sbuflen,P_NODE,M_NODE)   !...transpose sfcx->sfc
+      call fourierout(sfc,phy)                       ! sfc -> phy
+
+      end

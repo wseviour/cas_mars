@@ -1,0 +1,103 @@
+       subroutine startsht()
+       implicit none
+
+#include <spectral.h>
+#include <fields.h>
+#include <decomp.h>
+#include <mpcluster.h>
+#include <scptrs.h>
+#include <io.h>
+
+ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+c     Local decalarations
+ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+
+       INT_TYPE  ilev,ifld
+       INT_TYPE  m,n, sc_p,k,mch,nlt_p 
+
+ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+c     Executable statements
+ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc       
+       
+c     define and distribute spectral coefs for vorticity into sc array
+c     sc and scm1 stored in spectral.h
+       do ilev=1,plev
+          do ifld=1,nsp
+             call initsc(sc,ilev,ifld)
+          end do
+       end do
+       
+       call copyreal(sc,scm1,2*(plev*nsp)*nsc)
+
+       print *,"spectral coefs distributed..."
+
+c     transform sc -> sfc to finish up
+
+       print *,"inverse fourier transforming..."
+
+c     blduv and go to fourier space from spectral space
+       call spectral_to_fourier(nltsc,sc,scm1,sfcx,sfc)
+
+#if 0
+c     Print out initial coef :
+      k=plev
+      write(MPI_UNIT,*)"-----------------------------------------------------------------------------"
+      write(MPI_UNIT,*)"Initial SCM1 in startsht.F"
+      write(MPI_UNIT,*)"-----------------------------------------------------------------------------"
+      write(MPI_UNIT,*)"  m   n    SCm1(vor)/sqt2      SCm1(Div)/sqt2       SCm1(Phi)/sqt2"
+      write(MPI_UNIT,*)"-----------------------------------------------------------------------------"
+      write(MPI_UNIT,*)"k=",k
+ 
+      do mch=0,mchmax(rank)
+         do m=mbeg(mch,rank),mend(mch,rank)
+cc            if (m.eq.0)then
+            sc_p=1+2*nsp*plev*scptr(m)
+            call scdebug(scm1(sc_p),m,k,0)
+c            write(MPI_UNIT,*)"k=",k+1
+c            call scdebug(scm1(sc_p),m,1,k+1)
+cc            endif
+         end do
+      end do
+
+      write(MPI_UNIT,*)"-----------------------------------------------------------------------------"
+      write(MPI_UNIT,*)"Initial SC in startsht.F"
+      write(MPI_UNIT,*)"-----------------------------------------------------------------------------"
+      write(MPI_UNIT,*)"  m   n    SCm1(vor)/sqt2      SCm1(Div)/sqt2       SCm1(Phi)/sqt2"
+      write(MPI_UNIT,*)"-----------------------------------------------------------------------------"
+      write(MPI_UNIT,*)"k=",k
+ 
+      do mch=0,mchmax(rank)
+         do m=mbeg(mch,rank),mend(mch,rank)
+cc            if (m.eq.0)then
+            sc_p=1+2*nsp*plev*scptr(m)
+            call scdebug(sc(sc_p),m,k,0)
+c            write(MPI_UNIT,*)"k=",k+1
+c            call scdebug(scm1(sc_p),m,1,k+1)
+cc            endif
+         end do
+      end do
+
+      write(MPI_UNIT,*)"-----------------------------------------------------------------------------"
+      write(MPI_UNIT,*)"NLTSC end of startsht.F"
+      write(MPI_UNIT,*)"-----------------------------------------------------------------------------"
+      write(MPI_UNIT,*)"  m   n    NLTSC(u_p)      NLTSC(v_p)    "
+      write(MPI_UNIT,*)"-----------------------------------------------------------------------------"
+      write(MPI_UNIT,*)"k=",k
+ 
+      do mch=0,mchmax(rank)
+         do m=mbeg(mch,rank),mend(mch,rank)
+cc            if (m.eq.0)then
+            nlt_p=1+2*nnlt*plev*vscptr(m)
+            call nltscdebug(nltsc(nlt_p),m,k,0)
+cc            endif
+         end do
+      end do
+
+#endif 
+       print *,"ready to begin timestepping..."
+
+       end 
+
+
+
+

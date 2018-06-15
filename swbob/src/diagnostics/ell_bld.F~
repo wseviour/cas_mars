@@ -1,0 +1,67 @@
+      subroutine ell_bld(phy,lon,lat,da,mom,area,atot,qc)
+
+c     CALLED BY: fld.F
+
+      implicit none
+
+#include <dims.h>            ! nlat2
+#include <stptrs.h>          ! u_p
+#include <diagptrs.h>
+#include <planet.h>          ! now includes phibar (7/30/05)
+
+      REAL_TYPE phy(nlon,nlat2,nphy,0:1,plev)
+      REAL_TYPE lon(nlon),lat(nlat2),da(nlat2)
+      REAL_TYPE za,h,q,qc,x,y,hpi,colat
+      REAL_TYPE area,mom(3),atot
+
+      INT_TYPE i,j,k,ins
+
+      hpi=pi/2.d0
+      do k=1,plev
+         do ins=0,1
+            do j=1,nlat2
+               colat=hpi-lat(j)*(-1.d0)**ins
+               do i=1,nlon
+
+                  za   =phy(i,j,vor_p,ins,k)
+                  h    =phy(i,j,theta_p,ins,k)/PhiBar
+                  q=za/(1.d0+h)
+
+                  atot=atot+da(j)
+
+                  if (q.ge.qc) then
+
+c     Lambert projection:
+                     x=2.d0*dsin(colat/2.d0)*dcos(lon(i))
+                     y=2.d0*dsin(colat/2.d0)*dsin(lon(i))
+
+                     area=area+da(j)
+                     mom(1)=x**2*da(j)
+                     mom(2)=x*y*da(j)
+                     mom(3)=y**2*da(j)
+
+                  endif
+
+               end do
+            end do
+         end do
+      end do
+
+      end 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,12 @@
+#ifndef PARAMS_H_
+#define PARAMS_H_
+
+#define P_NODE XNPES
+#define M_NODE XNPES
+
+#define PLON   XPLON
+#define PLEV   1
+
+#define MAX_NUM_LONS 1
+
+#endif

@@ -1,0 +1,57 @@
+#include <type.h>
+      subroutine initktcoef(ktcoef,
+     $     coslat,
+     $     sinlat,
+     $     rlat,
+     $     k)
+      implicit none
+
+cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+c      Include Files
+cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+#include <dims.h>
+#include <planet.h>
+#include <fordamp0.h>
+cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+      REAL_TYPE ktcoef(nlat2,0:1)
+
+      REAL_TYPE coslat(nlat2)
+      REAL_TYPE sinlat(nlat2)
+      REAL_TYPE rlat(nlat2)
+
+      INT_TYPE i,j,ins,k
+      REAL_TYPE snlat,cslat,rad0,rad1
+
+cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+
+      do ins=0,1
+         do j=1,nlat2
+c old:
+c            cslat=coslat(j)
+c            if (ins.eq.0) then
+c               wst=0.5d0*(1.d0+dtanh((rlat(j)-latj)/dlat))
+c            else
+c               wst=0.5d0*(1.d0+dtanh((-rlat(j)-latj)/dlat))
+c            end if
+c            ktcoef(j,ins) = ka*wst + ks*(1-wst)
+            ktcoef(j,ins) = kt
+         end do
+      end do
+
+ctmp: confine kt to mid and polar latitudes (prevent wave dissipation at eq):
+      rad0=10.0*pi/180.d0  ! goes to zero at 10deg N
+      rad1=30.0*pi/180.d0  ! goes to one at 30deg N
+      do j=1,nlat2
+         if(rlat(j).ge.rad1) then
+            ktcoef(j,0)=kt
+         else if(rlat(j).ge.rad0) then
+            ktcoef(j,0)=kt*( dsin((pi/2.0)*(rlat(j)-rad0)/(rad1-rad0)) )**2
+         else
+            ktcoef(j,0)=0.d0
+         endif
+         ktcoef(j,1)=0.d0
+      enddo
+
+
+
+      end

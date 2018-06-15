@@ -1,0 +1,40 @@
+      subroutine equiout
+      implicit none
+
+#include <coord.h>
+#include <io.h>
+#include <equilib.h>
+
+      character*80 zavgfile
+      character*60 stub
+      character*4  tail,tail_lj
+
+      INT_TYPE  ounit
+      INT_TYPE  i,j,k
+      real*4 ubarsp(plat,plev)
+      real*4 vbarsp(plat,plev)
+      real*4 hbarsp(plat,plev)
+      real*4 zbarsp(plat,plev)
+      
+      do i=1,nzavg
+         do k=1,plev
+            do j=1,plat
+               ubarsp(j,k,i)=real(ubar(j,k,i))
+               vbarsp(j,k,i)=real(vbar(j,k,i))
+               hbarsp(j,k,i)=real(hbar(j,k,i))
+               zbarsp(j,k,i)=real(zbar(j,k,i))
+            enddo
+         enddo
+      enddo
+
+c     Files units are opened in initio.F
+      call writespreal(ubarsp,plev*plat,36)
+      call writespreal(vbarsp,plev*plat,37)
+      call writespreal(hbarsp,plev*plat,38)
+      call writespreal(zbarsp,plev*plat,39)
+
+      do i=36,39
+         call flush(i)
+      enddo
+
+      end

@@ -1,0 +1,531 @@
+#!/bin/csh -f
+
+# this shell script compiles the code and lauches a batch job
+# to run the model
+
+# Auto detect architecture and root directory
+
+set arch=`uname -s`
+set host=`hostname -s`
+set here=`pwd`
+set root=`echo $here | sed -e s/'\/run'//`
+
+if ( $arch == Darwin ) then
+  set arch = Linux
+endif
+# Platform specific settings...
+
+#set host=modon
+set host=wha
+
+
+set outdir='output'
+
+if ( ($arch == Linux) && ($host == modon) ) then
+  set make = gmake
+  set nnodes = 1
+  set nppn   = 1
+  set mpi    = 0
+#  set subdir=${HOME}'/dataloc/bb/'$outdir
+  set subdir='/vraid2/rks/bb/'$outdir
+endif
+if ( ($arch == Linux) && ($host == wha) ) then
+  set make = make
+  set nnodes = 1                # number of nodes    2 4 8 16 32 ...
+  set nppn   = 1                # number of processors per node
+  set mpi    = 0
+  set subdir=${HOME}'/Research/cas_mars/'$outdir
+endif
+
+#--------------------------------------------------------------
+# set the following parameters:
+#--------------------------------------------------------------
+#   parameter                  desrciption                            examples
+
+set pi=3.141592653589793
+
+set res = 85
+
+#set icn = pv
+set icn = res_test
+#set icn = zz
+# pv: initial vortex patch
+# zz: zero initial wind, vortex spun up by relaxation
+
+set sat = 1
+# sat = 0: topography linear increasing in time
+# sat = 1: topography saturates at given value
+# !!! need to change ramp function in advance.F !!!
+
+#set hbar=10000.0  # gives LD=sqrt(g*hbar)/f0 ~ NH/f0*sqrt(kappa(1-kappa))
+set hbar=17000.0 # Mars value - wjms
+#set radius=6371000.0
+set radius=3396000.0 # Mars value - wjms
+#set secperday=86400.0
+set secperday=88774.0 # Mars value - wjms
+#set gravity=9.81
+set gravity=3.71 # Mars value - wjms
+#set omega=`echo "2*$pi/86165.0" | bc -l`
+set omega=`echo "2*$pi/88774.0" | bc -l` # Mars value - wjms
+set ldeform=`echo "sqrt($gravity*$hbar)/(2*$omega)" | bc -l`
+
+#forcing/damping parameters to be set:
+#damping:
+set kv=0 ; set kt=0 ; set phih=0 ; set dlat=0 ; set ueq0=0
+#eddy forcing:
+set amp=0 ; set gamma=0 ; set nf0=0 ; set nf1=0 ; set ireal=0
+#topography/vorticity:
+set latt=0 ; set dlatt=0 ; set mt=0 ; set ampt=0 ; set tfac=0 ; set cpt=0
+#heating:
+set lath=0 ; set dlath=0 ; set mh=0 ; set amph=0 ; set hfac=0 ; set cph=0
+#mechanical:
+set latm=0 ; set dlatm=0 ; set mm=0 ; set ampm=0
+
+
+if ( $icn == res_test ) then
+
+    set iclat0=0.
+    set iclat1=57.
+    set iclat11=60
+    set iclat2=70. #62.- wjms
+    set iclat21=73
+# q scaled by polar coriolis / hbar
+    set dq1=1.3
+    set dq0=0.29327275    # for dq1=1, wd=0.04, wde=3*wd
+    #set dq0=0.2660254 # wjms
+    set dq2=0.7 # fraction of 2om/H for poleward side of vortex - wjms
+# set dq0=0.254699    # for dq1=1.5, wd=0.04, wde=3*wd
+    set alpha=0.5
+    #set alpha=0.05 # wjms
+    #set wd=0.04
+    #set wd=0.005
+    #set wd=0.0001 # wjms
+    set wd = 0.0
+    set wde=`echo "3.0*$wd" | bc -l`
+# set contour for elliptic diagnostics:
+    set qc=1.0
+
+# thermal relaxation:
+    set phih=0.0
+    set dlat=-1.0    # -ve to indicate read theq from ic.dat
+    set ueq0=0.0
+    #set kt=0.1
+    set kt=4.0 #- wjms
+
+# momentum relaxation:
+#    set dlatm=-10.0    # -ve to indicate read ueq from ic.dat
+    set dlatm=10.0
+#    set kv=0.1
+    set kv=0.05
+
+    set s1=`echo $iclat1 | sed -e s/'\.'//`
+    set s2=`echo $dq1 | sed -e s/'\.'//`
+    set s4=`echo $kt | sed -e s/'\.'//`
+    set s5=`echo $kv | sed -e s/'\.'//`
+#    set label=${icn}${s1}${s2}-kt${s4}-kv${s5}
+#    set label=${icn}-urlxSH-kt${s4}-kv${s5}
+    set label=${icn}${iclat1}-${iclat2}-nu4-urlx-kt${kt}
+
+endif
+
+
+if ( $icn == ann_pert ) then
+
+    set iclat0=0.
+    set iclat1=60.
+    set iclat2=70. #62.- wjms
+# q scaled by polar coriolis / hbar
+    set dq1=1.3
+    set dq0=0.29327275    # for dq1=1, wd=0.04, wde=3*wd
+    #set dq0=0.2660254 # wjms
+    set dq2=0.7 # fraction of 2om/H for poleward side of vortex - wjms
+# set dq0=0.254699    # for dq1=1.5, wd=0.04, wde=3*wd
+    set alpha=0.5
+    #set alpha=0.05 # wjms
+    #set wd=0.04
+    #set wd=0.005
+    #set wd=0.0001 # wjms
+    set wd = 0.012
+    set wde=`echo "3.0*$wd" | bc -l`
+# set contour for elliptic diagnostics:
+    set qc=1.0
+
+# thermal relaxation:
+    set phih=0.0
+    set dlat=-1.0    # -ve to indicate read theq from ic.dat
+    set ueq0=0.0
+    #set kt=0.1
+    set kt=0.0 #- wjms
+
+# momentum relaxation:
+#    set dlatm=-10.0    # -ve to indicate read ueq from ic.dat
+    set dlatm=10.0
+#    set kv=0.1
+    set kv=0.05
+
+    set s1=`echo $iclat1 | sed -e s/'\.'//`
+    set s2=`echo $dq1 | sed -e s/'\.'//`
+    set s4=`echo $kt | sed -e s/'\.'//`
+    set s5=`echo $kv | sed -e s/'\.'//`
+#    set label=${icn}${s1}${s2}-kt${s4}-kv${s5}
+#    set label=${icn}-urlxSH-kt${s4}-kv${s5}
+    set label=${icn}${iclat1}-${iclat2}-nu4-urlx-kt${kt}
+
+endif
+
+
+if ( $icn == pv ) then
+
+    set iclat0=0.0
+    set iclat1=60.
+    set iclat2=0.0
+# q scaled by polar coriolis / hbar
+    set dq1=1.0
+    set dq0=0.29327275    # for dq1=1, wd=0.04, wde=3*wd
+    set dq2=0.0
+# set dq0=0.254699    # for dq1=1.5, wd=0.04, wde=3*wd
+    set alpha=0.5
+    set wd=0.01
+    set wde=`echo "3.0*$wd" | bc -l`
+# set contour for elliptic diagnostics:
+    set qc=1.0
+
+# thermal relaxation:
+    set phih=0.0
+    set dlat=-1.0    # -ve to indicate read theq from ic.dat
+    set ueq0=0.0
+    #set kt=0.05
+    set kt=0.0
+
+# momentum relaxation:
+#    set dlatm=-10.0    # -ve to indicate read ueq from ic.dat
+    set dlatm=10.0
+#    set kv=0.1
+    set kv=0.05
+
+    set s1=`echo $iclat1 | sed -e s/'\.'//`
+    set s2=`echo $dq1 | sed -e s/'\.'//`
+    set s4=`echo $kt | sed -e s/'\.'//`
+    set s5=`echo $kv | sed -e s/'\.'//`
+#    set label=${icn}${s1}${s2}-kt${s4}-kv${s5}
+#    set label=${icn}-urlxSH-kt${s4}-kv${s5}
+    set label=${icn}60-nu4-urlx-new
+
+endif
+
+if ( $icn == zz ) then
+
+# need to define approriate values of dq0,dq1 for diagnostics/ell.F
+# depends on value of polar cooling ueq0:
+    set dq0=0.0
+    set dq1=1.0
+    set qc=1.0
+    set iclat0=0.0
+    set iclat1=0.0
+    set iclat2=0.0
+    set alpha=0.0
+    set wd=0.0
+    set wde=0.0
+
+# thermal relaxation:
+#    set phih=60.0     # SP06 used phih=50,dlat=10 (gives nonmonotic PV)
+    set phih=10.0     # RW04 low latitude limit of sin^2 profile
+#    set dlat=10.
+    set dlat=99.    # 99. to indicate Rong+Waugh-like profile
+    set dh=0.3      # fraction of hbar
+    set ueq0=`echo "$dh*$hbar*$gravity" | bc -l`
+    set kt=0.05
+
+# momentum relaxation:
+    set dlatm=10.0    # -ve to indicate read ueq from ic.dat (zero for zz)
+    set kv=0.05    #use env1 instead of env in initkvcoef.F
+
+    set s1=`echo $phih | sed -e s/'\.'//`
+    set s2=`echo $dlat | sed -e s/'\.'//`
+    set s3=`echo $dh | sed -e s/'\.'//`
+    set s4=`echo $kt | sed -e s/'\.'//`
+    set s5=`echo $kv | sed -e s/'\.'//`
+#    set label=${icn}${s1}${s2}${s3}-kt${s4}-kv${s5}
+#    set label=${icn}rws3-urlx-kt${s4}kv${s5}
+    set label=${icn}rws3-nu4-urlx
+endif
+
+if ( $sat == 0 ) then
+# topo height at end of simulation as fraction of h0:
+    set tfac=0.25    # use with ndays=1000
+    set ampt=`echo "$tfac*$hbar*$gravity" | bc -l`
+    set mt=2
+    set latt=0.0
+#    set latt=-90.0   # global topography - label GT
+endif
+
+# angular frequency = freq/mt, scaled by vortex jump:
+set cpt=-0.020 #-wjms
+#set cpt = 0.0
+set cstr=`echo $cpt | sed -e s/'\.'//`
+set cpt=`echo "$cpt*$dq1*2.*$omega" | bc -l`
+
+set usb=`echo "1.0*$cpt*$radius" | bc -l`
+set ampm=$usb
+
+if ( $sat == 1 ) then
+    #set tsat=800
+    set tsat=200.0 #trying to turn off topography- wjms
+    set tfac=`echo "0.25*$tsat/1000" | bc -l`
+    set ampt=`echo "$tfac*$hbar*$gravity" | bc -l`
+    set mt=2
+#    set latt=0.0
+    set latt=-90.0   # global topography - label GT
+    set cstr=${cstr}sat${tsat}
+endif
+
+set jobname=${label}.c${cstr}.T${res}
+
+#set tstd = 480    #  240 @ T85, 480 @ T170
+#set tstd = 120 # guess from above pattern - wjms
+set tstd = 240
+
+set ndays = 500
+
+# forcing and other compile options:
+set rterm=0
+set fdrag=0
+set frlax=1
+#set frlax=0
+set frlaxz=0
+set ftopo=1
+#set ftopo=0 # wjms
+set fheat=0
+set fvort=0
+set fmech=0
+set furlx=1
+set fspec=0
+set adapt=0
+set hdiss=0
+set m2sym=0 # wjms
+
+set mdays = $ndays
+
+set delhi = 8
+#set nuhi=0.0001d0  # about 10/day
+set nuhi=0.0004d0
+
+set dello = 0
+set  nulo=0.0d0
+
+set restart = 0
+@ restartfreq = ( $tstd * $mdays )   # not used ?
+
+set plev = 1
+
+@ zonfreq = (  1 * $tstd )       #zonal output interval (in timesteps)
+#@ fldfreq = (  1 * $tstd )       #field output interval (in timesteps)
+@ fldfreq = 120
+
+
+# end of paramters to be set
+#--------------------------------------------------------------
+# no need to change anything below this line
+#
+
+# @ ntst = ( $ndays * $tstd )
+@ ntst = ( $mdays * $tstd )
+
+@ npes = ( $nnodes * $nppn )
+
+# write forcing parameters to input files:
+if ( $fdrag == 1 ) then
+cat > input_for_drag <<EOF
+$latm $dlatm $ampm $kv
+EOF
+endif
+if ( $frlax == 1 ) then
+cat > input_for_rlax <<EOF
+$phih $dlat $ueq0 $kt $usb
+EOF
+endif
+if ( $fspec == 1 ) then
+cat > input_for_spec <<EOF
+$amp $gamma $nf0 $nf1 $ireal
+EOF
+endif
+if ( $ftopo == 1 ) then
+cat > input_for_topo <<EOF
+$latt $dlatt $mt $ampt $cpt
+EOF
+endif
+if ( $fheat == 1 ) then
+cat > input_for_heat <<EOF
+$lath $dlath $mh $amph $cph
+EOF
+endif
+if ( $fvort == 1 ) then
+cat > input_for_vort <<EOF
+$latt $dlatt $mt $ampt $cpt
+EOF
+endif
+if ( $fmech == 1 ) then
+cat > input_for_mech <<EOF
+$latm $dlatm $mm $ampm
+EOF
+endif
+if ( $furlx == 1 ) then
+cat > input_for_urlx <<EOF
+$latm $dlatm $ampm $kv
+EOF
+endif
+
+set here=`pwd`
+set root=`echo $here | sed -e s/'\/run'//`
+
+touch ../src/model/hyper.F
+touch ../src/model/advance.F
+touch ../src/model/bldnlt.F
+touch ../src/spectral/initforsc.F
+touch ../src/model/main.F
+touch ../src/model/timeadvance.F
+touch ../src/diagnostics/diag.F
+touch ../src/diagnostics/zacc_diag.F
+touch ../src/spectral/fourier.F
+
+set rundir=${subdir}/${jobname}
+
+if ( -d $rundir ) then
+  echo "Stopped: Allready existing jobname"
+  exit
+endif
+
+mkdir $rundir
+cp ${root}/grids/GRID.T${res} $rundir
+
+set infile = progsc.ini
+set inputb = bobx.in
+set inputg = genx.in
+
+set inc=${root}/src/include
+set model=${root}/src/model
+if (! -d $root/jobs) mkdir $root/jobs
+if (! -d $root/ics) mkdir $root/ics
+
+#RES: 42,85,170,341,682,1365,2730
+if( $res == 2730 ) set plon=8192
+if( $res == 1365 ) set plon=4096
+if( $res == 682 ) set plon=2048
+if( $res == 341 ) set plon=1024
+if( $res == 170 ) set plon=512
+if( $res == 85 ) set plon=256
+if( $res == 42 ) set plon=128
+if( $res == 21 ) set plon=64
+sed -e s/XNPES/$npes/ $inc/params.h.temp > $inc/params.h.1
+sed -e s/XPLON/$plon/ $inc/params.h.1 > $inc/params.h.2
+sed -e s/XPLEV/$plev/ $inc/params.h.2 > $inc/params.h.3
+diff $inc/params.h.3 $inc/params.h > /dev/null || mv $inc/params.h.3 $inc/params.h
+rm -f $inc/params.h.1 $inc/params.h.2 $inc/params.h.3
+
+sed -e s/XRAD/$radius/ $model/planet.h.temp > $model/planet.h.1
+sed -e s/XSPD/$secperday/ $model/planet.h.1 > $model/planet.h.2
+sed -e s/XLD/$ldeform/ $model/planet.h.2 > $model/planet.h.3
+sed -e s/XOM/$omega/ $model/planet.h.3 > $model/planet.h.4
+diff $model/planet.h.4 $model/planet.h > /dev/null || mv $model/planet.h.4 $model/planet.h
+rm -f $model/planet.h.1 $model/planet.h.2 $model/planet.h.3 $model/planet.h.4
+
+if ( $icn == ann_pert ) then
+cat > ${inputg} <<EOF1
+$iclat0 $iclat1 $iclat2 $dq0 $dq1 $dq2 $qc
+$alpha $wd $wde
+EOF1
+endif
+if ( $icn == res_test ) then
+cat > ${inputg} <<EOF1
+$iclat0 $iclat1 $iclat11 $iclat2 $iclat21 $dq0 $dq1 $dq2 $qc
+$alpha $wd $wde
+EOF1
+endif
+
+
+
+
+cat > ${inputb} <<EOF2
+ &MODELNL
+ CTITLE    = '${jobname}'
+ CASEID    = '${jobname}'
+ NSPDAY    = $tstd
+ NTIMESTEP = $ntst
+ INIFILE   = './${infile:t}'
+ RSTFREQ   = $restartfreq
+ ZONFREQ   = $zonfreq
+ FLDFREQ   = $fldfreq
+ DELHI    = $delhi
+ DELLO    = $dello
+ NUHI     = $nuhi
+ NULO     = $nulo
+ &END
+EOF2
+
+#####################################
+########  build genx  #################
+
+# NEW - first create initial condition:
+if (! -d ${root}/build_icn) mkdir ${root}/build_icn
+cp ${root}/src/genini/${icn}/Makefile ${root}/build_icn
+cd ${root}/build_icn
+$make HOST=$host _MPI=$mpi
+if ($status) then
+  echo "Compilation of genx failed"
+  exit
+endif
+
+mv ${root}/build_icn/genx $rundir
+mv ${root}/run/$inputg $rundir
+cd ${rundir}
+
+echo "running genx..."
+
+./genx < ${inputg} > genx.out
+#./genx < ${inputg}
+#exit
+
+#####################################
+########  build bobx  #################
+
+if (! -d ${root}/build_bob) mkdir ${root}/build_bob
+
+cp ${root}/src/model/Makefile ${root}/build_bob
+cd ${root}/build_bob
+$make HOST=$host _MPI=$mpi RR=$rterm FD=$fdrag FR=$frlax FRZ=$frlaxz FT=$ftopo FH=$fheat FV=$fvort FM=$fmech FS=$fspec FU=$furlx AD=$adapt HD=$hdiss M2=$m2sym
+
+if ($status) then
+  echo "Compilation of bobx failed"
+  exit
+endif
+
+mv bobx $rundir
+mv ${root}/run/$inputb $rundir
+if ( $frlax == 1 ) mv ${root}/run/input_for_rlax $rundir
+if ( $fdrag == 1 ) mv ${root}/run/input_for_drag $rundir
+if ( $ftopo == 1 ) mv ${root}/run/input_for_topo $rundir
+if ( $fheat == 1 ) mv ${root}/run/input_for_heat $rundir
+if ( $fvort == 1 ) mv ${root}/run/input_for_vort $rundir
+if ( $fmech == 1 ) mv ${root}/run/input_for_mech $rundir
+if ( $fspec == 1 ) mv ${root}/run/input_for_spec $rundir
+if ( $furlx == 1 ) mv ${root}/run/input_for_urlx $rundir
+cp ${root}/run/machines $rundir
+
+#####################################
+########  run bobx  #################
+
+cd $rundir
+
+echo "running bobx..."
+
+./bobx < ${inputb} >> bobx.out &
+
+cp ${root}/run/rbvac ${rundir}/rbvac
+
+#if ( ($arch == Linux) && ( ($host == euclid) || ($host == orcas) ) ) then
+#/usr/lib64/openmpi/1.4-gcc/bin/mpirun -np ${npes} -machinefile ./machines ./bobx < ${input} >> bobx.out &
+#endif
+
+#rm -rf ${root}/build_bob
+
+exit (0)

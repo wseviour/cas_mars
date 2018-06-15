@@ -1,0 +1,87 @@
+#!/bin/csh -f
+
+
+# this shell script compiles the code and runs the executable
+# to create the horizontal grid
+
+# Auto detect architecture and root directory
+
+set arch=`uname -s`
+set here=`pwd`
+set root=`echo $here | sed -e s/'\/run'//`
+
+#
+#--------------------------------------------------------------
+# set the spectral resolution (eg. 21 42 85 170 341 ... )
+#--------------------------------------------------------------
+
+set res = 42
+
+#set HOST=bluesky
+#set HOST=lightning
+#set HOST=copson
+set HOST=typhoon
+#set HOST=euler
+#set HOST=localhost
+
+# end of paramters to be set
+#--------------------------------------------------------------
+# no need to change anything below this line
+#
+# Platform specific settings...
+
+## IBM AIX/bluesky specific:
+if ($arch == AIX) then
+  set make = gmake
+endif
+
+## MacOS X (Darwin) laptop specific:
+if ($arch == Darwin) then
+  set make = gnumake
+endif
+
+## Linux laptop specific:
+if ($arch == Linux) then
+  set make = gmake
+endif
+
+
+set here=`pwd`
+set root=`echo $here | sed -e s/'\/run'//`
+set rundir=$root/grids
+
+#RES: 42,85,170,341,682
+if( $res == 2730 ) set plon=8192
+if( $res == 1365 ) set plon=4096
+if( $res == 682 ) set plon=2048
+if( $res == 341 ) set plon=1024
+if( $res == 170 ) set plon=512
+if( $res == 85 ) set plon=256
+if( $res == 42 ) set plon=128
+if( $res == 21 ) set plon=64
+
+set inc=${root}/src/include
+sed -e s/XNPES/1/ $inc/params.h.temp > $inc/params.h.1
+sed -e s/XPLON/$plon/ $inc/params.h.1 > $inc/params.h.2
+sed -e s/XPLEV/1/ $inc/params.h.2 > $inc/params.h.3
+diff $inc/params.h.3 $inc/params.h > /dev/null || mv $inc/params.h.3 $inc/params.h
+rm -f $inc/params.h.1 $inc/params.h.2 $inc/params.h.3
+
+if (! -d ${root}/build_grid) mkdir ${root}/build_grid
+cp ${root}/src/grid/Makefile ${root}/build_grid
+cd ${root}/build_grid
+$make HOST=$HOST
+
+if ($status) then
+  echo "Compilation of gridx failed"
+  exit
+endif
+ 
+cp gridx $rundir/gridx.T${res}
+cd $rundir
+./gridx.T${res}
+
+echo "--- Grid T${res} created in $rundir ---"
+rm -f gridx.T${res}
+#rm -rf ${root}/build_grid
+exit

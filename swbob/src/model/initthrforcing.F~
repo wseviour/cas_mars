@@ -1,0 +1,42 @@
+#include <type.h>
+      subroutine initthrforcing(fthrloc,
+     $                         ftheloc,
+     $                         fthploc,
+     $                         k)
+      implicit none
+
+cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+c      Include Files
+cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+#include <dims.h>
+#include <planet.h>
+#include <fordamp0.h>
+
+cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+      REAL_TYPE fthrloc(nlon,nlat2,0:1)
+      REAL_TYPE ftheloc(nlon,nlat2,0:1)
+      REAL_TYPE fthploc(nlon,nlat2,0:1)
+
+      INT_TYPE i,j,ins,k
+
+cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+
+c     computes fthr=fthe+fthp (needed to build r term in bldnlt)
+
+      do ins=0,1
+         do j=1,nlat2
+            do i=1,nlon
+               fthr0(i,j,ins)=0.d0
+#ifdef FRLAX
+               fthr0(i,j,ins)=fthr0(i,j,ins)+fthe0(i,j,ins)
+#endif
+#ifdef FHEAT
+               fthr0(i,j,ins)=fthr0(i,j,ins)+fthp0(i,j,ins)
+#endif
+
+c               fthrloc(i,j,ins)=ftheloc(i,j,ins)+fthploc(i,j,ins)
+            enddo
+         enddo
+      enddo
+
+      end

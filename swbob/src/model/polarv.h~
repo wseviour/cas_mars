@@ -1,0 +1,9 @@
+#ifndef POLARV_H_
+#define POLARV_H_
+
+      REAL_TYPE gammap
+      common /polarvcoef/ gammap
+
+#endif
+
+

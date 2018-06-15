@@ -1,0 +1,53 @@
+      subroutine diag(itime,itime0)
+      implicit none
+
+#include <io.h>
+#include <mpcluster.h>
+#include <diag.h>
+#include <diagptrs.h>
+#include <modeltime.h>
+#include <timestep.h>
+#include <uspec.h>
+#include <dims.h>
+#include <planet.h>
+
+      INT_TYPE itime,itime0,icount,nacc
+      common /diagctr/icount,nacc
+
+ccccccccccccccccccccccccccccccccccccccccccccccc
+
+      if (itime.eq.itime0) then
+         if(itime0.eq.0)then    !initial condition
+         else                   !restart
+         endif
+         nacc=0
+         icount=nint((time_start+time_out)/SecPerDay)
+      else
+c     accumulate zonal diagnostics if necessary (use instead of zavg_diag):
+         call zacc_diag(nacc)   !untested
+c
+#ifdef ADAPT
+c     zonal means and spectra every time_zon:
+         if (mod(time_current,time_zon).lt.(dt2/2.d0)) then 
+c            call zavg_diag
+            call sp_diag
+         endif
+c     physical fields every time_out:
+         if (mod(time_current,time_out).lt.(dt2/2.d0)) then
+            call sf_diag(icount)
+            icount=icount+nint(time_out/SecPerDay)
+         endif
+#else
+         if (mod(itime,zonfreq).eq.0) then 
+c            call zavg_diag
+            call sp_diag
+         endif
+         if (mod(itime,fldfreq).eq.0) then
+            call sf_diag(icount)
+            icount=icount+nint(time_out/SecPerDay)
+         endif
+#endif
+
+      endif
+
+      end 

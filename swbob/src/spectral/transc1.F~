@@ -1,0 +1,28 @@
+
+      subroutine transc1(sc,m,revorsc)
+      implicit none
+
+#include <type.h>
+#include <dims.h>
+#include <scptrs.h>
+#include <stptrs.h>
+#include <specuv.h>
+c-----------------------------------------------
+c     Local declaration
+c-----------------------------------------------
+      INT_TYPE k,m,n,ic,sc_p
+      REAL_TYPE sc(0:1,m:nn,plev)
+      REAL_TYPE revorsc(0:1,nsc*plev)
+c-----------------------------------------------
+c     executable statements
+c-----------------------------------------------
+      do k=1,plev
+         do n=m,nn
+            sc_p=1+plev*scptr(m)+(nn+1-m)*(k-1)+n-m
+            do ic=0,1
+               revorsc(ic,sc_p)=sc(ic,n,k)
+            end do
+         end do
+      end do
+
+      end

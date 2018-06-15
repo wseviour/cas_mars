@@ -1,0 +1,21 @@
+#ifndef DEL8_H_
+#define DEL8_H_
+
+#include <planet.h>
+
+      REAL_TYPE hdvar, hdfix
+      REAL_TYPE td8fac(0:nn),ud8fac(0:nn)
+c      REAL_TYPE td8cor(0:nn),ud8cor(0:nn)
+
+      common /del8fac/ td8fac,ud8fac
+c      common /del8cor/ td8cor,ud8cor
+
+      parameter( hdvar=1.d0/(1.0d0*SecPerDay) )
+      parameter( hdfix=0.d0 )
+
+c hdvar is the damping rate in units of 1/days on the smallest scale in the model
+c hdfix is a fixed diffusion in units of m^2/s, independent of resolution
+
+#endif
+
+

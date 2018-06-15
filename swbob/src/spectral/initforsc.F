@@ -1,0 +1,412 @@
+
+      subroutine initforsc()
+
+      implicit none
+
+cccccccccccccccccccccccccccccccccccccccccccc
+c     Include files
+cccccccccccccccccccccccccccccccccccccccccccc
+
+
+#include <decomp.h>    
+#include <dims.h>      
+#include <fordamp.h>  
+#include <fordamp0.h>
+#include <io.h>        
+#include <mpcluster.h> 
+#include <physical.h>  
+#include <planet.h>    
+#include <scptrs.h>    
+#include <spectral.h>  
+#include <modeltime.h>
+#include <timestep.h>
+
+cccccccccccccccccccccccccccccccccccccccccccc
+c     Local Declarations
+cccccccccccccccccccccccccccccccccccccccccccc
+
+      REAL_TYPE fthe(nlon,nlat2,0:1,plev,ielemd,jelemd)
+      REAL_TYPE fthp(nlon,nlat2,0:1,plev,ielemd,jelemd)
+c      REAL_TYPE fvor(nlon,nlat2,0:1,plev,ielemd,jelemd)
+c      REAL_TYPE fmechu(nlon,nlat2,0:1,plev,ielemd,jelemd)  ! in fordamp.h
+c      REAL_TYPE fmechv(nlon,nlat2,0:1,plev,ielemd,jelemd)
+      REAL_TYPE theq(nlat2,0:1,plev,jelemd)
+      REAL_TYPE thplat(nlat2,0:1,plev,jelemd)
+      REAL_TYPE ueq(nlat2,0:1,plev,jelemd)
+
+!      REAL_TYPE gktcoef(plat,plev), gtheq(plat,plev), gthplat(plat,plev)
+      REAL_TYPE thini(plat,plev),uini(plat,plev)
+
+      REAL_TYPE ktmp, tmprnd, dummy  !, thsum,thsumg
+      REAL_TYPE cpt,cph
+
+      INT_TYPE  k,ie,je,jeg,i,j,ir
+      INT_TYPE  mch,ioe,m
+      INT_TYPE  nlt_p,sc_p,jptr
+
+      INT_TYPE navu,iunit
+      external navu
+
+cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+c     Executable statements
+cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+
+
+c     options:
+
+c     FRLAX - radiative relaxation to specified zonal h_e
+c     FDRAG - linear drag to zero vorticity
+c     FTOPO - topographic forcing
+c     FHEAT - specified heating (nonzonal)
+c     FMECH - specified mechanical forcing (nonzonal, deterministic)
+c     FSPEC - vorticity forcing (stochasic)
+c     RTERM - Shell & Held representation of vertical momentum flux
+
+c     !!! most have not been tested since code reorganization !!!
+
+c     read in initial conditions from ic.dat for possible
+c     thermal/momentum relaxation:
+      if (rank.eq.root) then
+         iunit=navu()
+         open(iunit,file='ic.dat',form='formatted',status='old')
+         read(iunit,*) dummy
+         read (iunit,*),thini
+         read (iunit,*),thini
+         read (iunit,*),thini
+         read (iunit,*),thini
+         read (iunit,*),uini
+         close(iunit)
+      endif
+      call broadcastreal(thini,plat*plev)
+      call broadcastreal(uini,plat*plev)
+
+#ifdef FDRAG
+      if (rank.eq.root) then
+         iunit=navu()
+         open(iunit,file='input_for_drag',form='formatted',status='old')
+         read (iunit,*),latm,dlatm,ampm,ktmp
+         close(iunit)
+      end if
+      call broadcastreal(latm,1)
+      call broadcastreal(dlatm,1)
+      call broadcastreal(ampm,1)
+      call broadcastreal(ktmp,1)
+      kv=ktmp/SecPerDay
+      do jeg=jebeg(rank),jeend(rank)
+         je=jeg-jebeg(rank)+1
+         do k=1,plev
+            call initkvcoef(kvcoef(1,0,k,je),
+     $           cslat(1,jeg),
+     $           snlat(1,jeg),
+     $           lat(1,jeg),
+     $           k)
+         end do
+      end do
+#endif
+
+
+c     Build forcing terms, fthe=ktcoef*theq etc. (PHYSICAL SPACE FORCING):
+#ifdef FRLAX
+      if (rank.eq.root) then
+         iunit=navu()
+         open(iunit,file='input_for_rlax',form='formatted',status='old')
+         read (iunit,*),latj,dlat,polvor,ktmp,usb
+         close(iunit)
+      end if
+      call broadcastreal(latj,1)
+      call broadcastreal(dlat,1)
+      call broadcastreal(polvor,1)
+      call broadcastreal(ktmp,1)
+      call broadcastreal(usb,1)
+      kt=ktmp/SecPerDay
+      do jeg=jebeg(rank),jeend(rank)
+         je=jeg-jebeg(rank)+1
+         do k=1,plev
+            call initktcoef(ktcoef(1,0,k,je),
+     $           cslat(1,jeg),
+     $           snlat(1,jeg),
+     $           lat(1,jeg),
+     $           k)
+         end do
+      end do
+!      thsum=0.d0
+      do jeg=jebeg(rank),jeend(rank)
+         je=jeg-jebeg(rank)+1
+         do ie=1,ielem(jeg)
+            do k=1,plev
+               call inittheforcing(fthe(1,1,0,k,ie,je),
+     $              theq(1,0,k,je),
+     $              ktcoef(1,0,k,je),
+     $              cslat(1,jeg),
+     $              snlat(1,jeg),
+     $              lat(1,jeg),   !da(1,jeg),thsum,
+     $              k)
+            end do
+         end do
+      end do
+!      call psumreal(thsum,thsumg,1)
+!      write(*,*) "thsum = ",thsumg
+cccccccccccccccc
+      if (dlat.le.0) then
+      do k=1,plev
+         jptr=jbeg(rank)
+         do jeg=jebeg(rank),jeend(rank) ! loop over elements
+            je=jeg-jebeg(rank)+1
+            do j=1,nlat2
+               theq(j,0,k,je)=thini(jptr,k)
+               theq(j,1,k,je)=thini(plat+1-jptr,k)
+               jptr=jptr+1
+            enddo
+         enddo
+      enddo
+      do jeg=jebeg(rank),jeend(rank)
+         je=jeg-jebeg(rank)+1
+         do ie=1,ielem(jeg)
+            do k=1,plev
+               call inittheforcingic(fthe(1,1,0,k,ie,je),
+     $              theq(1,0,k,je),
+     $              ktcoef(1,0,k,je),
+     $              k)
+            enddo
+         enddo
+      enddo
+      endif
+cccccccccccccccc
+      call physical_to_spectral(fthe,fthesc,plev)
+#endif
+
+
+#ifdef FTOPO
+      if (rank.eq.root) then
+         iunit=navu()
+         open(iunit,file='input_for_topo',form='formatted',status='old')
+         read (iunit,*),latt,dlatt,wavet,ampt,cpt
+         close(iunit)
+      end if
+      call broadcastreal(latt,1)
+      call broadcastreal(dlatt,1)
+      call broadcastreal(wavet,1)
+      call broadcastreal(ampt,1)
+      call broadcastreal(cpt,1)
+      freqt=cpt*wavet
+      do jeg=jebeg(rank),jeend(rank)
+         je=jeg-jebeg(rank)+1
+         do ie=1,ielem(jeg)
+            do k=1,plev
+               call inittopoforcing(ftopo(1,1,0,k,ie,je),
+     $              ftopokt(1,1,0,k,ie,je),
+     $              ktcoef(1,0,k,je),
+     $              cslat(1,jeg),
+     $              snlat(1,jeg),
+     $              lat(1,jeg),
+     $              lon(1,ie,je),
+     $              k)
+            end do
+         end do
+      end do
+      call physical_to_spectral(ftopo,ftoposc,plev)
+      call physical_to_spectral(ftopokt,ftopoktsc,plev)
+#endif
+
+#ifdef FVORT
+      if (rank.eq.root) then
+         iunit=navu()
+         open(iunit,file='input_for_vort',form='formatted',status='old')
+         read (iunit,*),latt,dlatt,wavet,ampt,cpt
+         close(iunit)
+      end if
+      call broadcastreal(latt,1)
+      call broadcastreal(dlatt,1)
+      call broadcastreal(wavet,1)
+      call broadcastreal(ampt,1)
+      call broadcastreal(cpt,1)
+      freqt=cpt*wavet
+      do jeg=jebeg(rank),jeend(rank)
+         je=jeg-jebeg(rank)+1
+         do ie=1,ielem(jeg)
+            do k=1,plev
+               call inittopoforcing(ftopo(1,1,0,k,ie,je),
+     $              cslat(1,jeg),
+     $              snlat(1,jeg),
+     $              lat(1,jeg),
+     $              lon(1,ie,je),
+     $              k)
+            end do
+         end do
+      end do
+      call physical_to_spectral(ftopo,ftoposc,plev)
+#endif
+
+
+#ifdef FHEAT
+      if (rank.eq.root) then
+         iunit=navu()
+         open(iunit,file='input_for_heat',form='formatted',status='old')
+         read (iunit,*),lath,dlath,waveh,amph,cph
+         close(iunit)
+      end if
+      call broadcastreal(lath,1)
+      call broadcastreal(dlath,1)
+      call broadcastreal(waveh,1)
+      call broadcastreal(amph,1)
+      call broadcastreal(cph,1)
+      freqh=cph*waveh
+      do jeg=jebeg(rank),jeend(rank)
+         je=jeg-jebeg(rank)+1
+         do ie=1,ielem(jeg)
+            do k=1,plev
+               call initthpforcing(fthp(1,1,0,k,ie,je),
+     $              cslat(1,jeg),
+     $              snlat(1,jeg),
+     $              lat(1,jeg),
+     $              lon(1,ie,je),
+     $              k)
+            end do
+         end do
+      end do
+      call physical_to_spectral(fthp,fthpsc,plev)
+#endif
+
+
+#ifdef RTERM
+c build the sum of fthe and fthp and save the physspacevalues as for k
+c ktcoef but with indices (1,1,0,k,ie,je), and add an item in fordamp.h
+      do jeg=jebeg(rank),jeend(rank)
+         je=jeg-jebeg(rank)+1
+         do ie=1,ielem(jeg)
+            do k=1,plev
+               call initthrforcing(fthr(1,1,0,k,ie,je),
+     $              fthe(1,1,0,k,ie,je),
+     $              fthp(1,1,0,k,ie,je),
+     $              k)
+            end do
+         end do
+      end do
+#endif
+
+
+#ifdef FMECH
+      if (rank.eq.root) then
+         iunit=navu()
+         open(iunit,file='input_for_mech',form='formatted',status='old')
+         read (iunit,*),latm,dlatm,wavem,ampm
+         close(iunit)
+      end if
+      call broadcastreal(latm,1)
+      call broadcastreal(dlatm,1)
+      call broadcastreal(wavem,1)
+      call broadcastreal(ampm,1)
+
+      do jeg=jebeg(rank),jeend(rank)
+         je=jeg-jebeg(rank)+1
+         do ie=1,ielem(jeg)
+            do k=1,plev
+               call initmomforcing(fmechu(1,1,0,k,ie,je),fmechv(1,1,0,k,ie,je),
+     $              cslat(1,jeg),
+     $              snlat(1,jeg),
+     $              lat(1,jeg),
+     $              lon(1,ie,je),
+     $              k)
+            end do
+         end do
+      end do
+c      call physical_to_spectral(fvor,fvorsc,plev)
+#endif
+
+cccccccccccccccc
+
+#ifdef FURLX
+c     relaxing to initial condition:
+      if (rank.eq.root) then
+         iunit=navu()
+         open(iunit,file='input_for_urlx',form='formatted',status='old')
+         read (iunit,*),latm,dlatm,ampm,ktmp
+         close(iunit)
+      end if
+      call broadcastreal(latm,1)
+      call broadcastreal(dlatm,1)
+      call broadcastreal(ampm,1)
+      call broadcastreal(ktmp,1)
+      kv=ktmp/SecPerDay
+      do jeg=jebeg(rank),jeend(rank)
+         je=jeg-jebeg(rank)+1
+         do k=1,plev
+            call initkvcoef(kvcoef(1,0,k,je),
+     $           cslat(1,jeg),
+     $           snlat(1,jeg),
+     $           lat(1,jeg),
+     $           k)
+         end do
+      end do
+c      if (dlatm.le.0) then    ! this condition moved into initurlxforcing.F
+      do k=1,plev
+         jptr=jbeg(rank)
+         do jeg=jebeg(rank),jeend(rank) ! loop over elements
+            je=jeg-jebeg(rank)+1
+            do j=1,nlat2
+               ueq(j,0,k,je)=uini(jptr,k)
+               ueq(j,1,k,je)=uini(plat+1-jptr,k)
+               jptr=jptr+1
+            enddo
+         enddo
+      enddo
+      do jeg=jebeg(rank),jeend(rank)
+         je=jeg-jebeg(rank)+1
+         do ie=1,ielem(jeg)
+            do k=1,plev
+            call initurlxforcing(fmechu(1,1,0,k,ie,je),fmechv(1,1,0,k,ie,je),
+     $              ueq(1,0,k,je),
+c     $              kvcoef(1,0,k,je),   ! multiplication by kv moved to bldnlt
+     $              cslat(1,jeg),
+     $              k)
+            enddo
+         enddo
+      enddo
+c      endif
+#endif
+
+#ifdef FSPEC
+c     (fvorsc defined in forsc.F)
+      if (rank.eq.root) then
+         write(*,*) ' !!! UNTESTED FORCING OPTION !!! '
+         iunit=navu()
+         open(iunit,file='input_for_spec',form='formatted',status='old')
+         read (iunit,*),eps0,gamma,nf0,nf1,irl
+         close(iunit)
+      end if
+      call broadcastreal(eps0,1)
+      call broadcastreal(gamma,1)
+      call broadcastint(nf0,1)
+      call broadcastint(nf1,1)
+      call broadcastint(irl,1)
+      call myrand(-1.d0)
+      do ir=0,irl+nint(time_start/(timestep*ntimestep))
+         call myrand(tmprnd)
+      enddo
+      if (rank.eq.root) write(*,*)'initial calls to rand:',ir
+c      if (nf.eq.1) STOP "not implemented in forsc.F (need fcor term)"
+#endif
+
+
+#if 0
+c     Output global ktcoef or theq
+      call znl_pgather(theq, gtheq, plev)
+      open(90,file="teq",form="formatted")
+      if(rank.eq.root)then      
+         write(90,*)((gtheq(i,j),i=1,plat),j=1,plev)
+      end if
+      close(90)
+      stop
+#endif
+#if 0
+      call znl_pgather(thplat, gthplat, plev)
+      open(90,file="thpfor",form="formatted")
+      if(rank.eq.root)then      
+         write(90,*)((gthplat(j,k),j=1,plat),k=1,plev)
+      end if
+      close(90)
+#endif
+
+
+      return
+      end

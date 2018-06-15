@@ -1,0 +1,33 @@
+        TIMING ROUTINES FOR COMPUTATIONAL SUPPORT BENCHMARKS
+
+subroutine timer_clear (timer_id)
+	timer_clear sets to 0 all stats for timer_id.
+	error if is not 0 < timer_id and <= MAX_TIMER
+
+subroutine timer_start (timer_id)
+        starts timer timer_id, increments number of starts.
+	error if is not 0 < timer_id and <= MAX_TIMER
+        error if timer was never cleared (initialized)
+
+subroutine timer_stop (timer_id)
+        accumulates time in seconds since the last start.
+	error if is not 0 < timer_id and <= MAX_TIMER
+        error if timer was never cleared (initialized)
+
+real*8 function timer_time (timer_id)
+	returns the total time in seconds  that have been
+	accumulated on timer timer_id.
+	error if is not 0 < timer_id and <= MAX_TIMER
+        error if timer was never cleared (initialized)
+
+integer function timer_calls (timer_id)
+	returns the number of starts on timer timer_id.
+	error if is not 0 < timer_id and <= MAX_TIMER
+        error if timer was never cleared (initialized)
+
+real*8 function timer_clock ()
+       vendor supplied function which returns a real*8 value
+       representing the current clock reading in seconds.
+       Currently supported vendor machine types in timer_clock.c:
+       SUN, IBM, T3D, YMP
+

@@ -1,0 +1,15 @@
+       subroutine output(itime,itime0)
+       implicit none
+
+#include <type.h>
+
+       INT_TYPE itime
+       INT_TYPE itime0
+
+#if 0
+       call restart(itime)
+#endif
+       call diag(itime,itime0)
+
+       end 
+

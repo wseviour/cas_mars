@@ -1,0 +1,55 @@
+c #ifndef CONGEN_H_
+c #define CONGEN_H_
+c
+      implicit double precision(a-h,o-z)
+c
+#include <dims.h>
+c
+      parameter (nh=PLON)
+      parameter (nlev=PLEV)
+      parameter (nlevm=100,npm=10000,nplm=10000)
+      parameter (nm=npm/20)
+      parameter (ncrm=20*npm/nlev)
+      parameter (dq=1.d0)
+c      npm:  maximum number of nodes on all contours
+c      nm:   maximum number of contours
+c      nplm: maximum number of nodes in any given layer
+c      ncrm: max number of contour crossings on the finest grid
+c            --- note: this should be roughly (4/amu)*(npm/nlev)
+c
+      parameter (zero=0.d0,one=1.d0,two=2.d0,three=3.d0)
+      parameter (half=one/two,third=one/three)
+      parameter (four=4.d0,six=6.d0,quart=one/four,sixth=one/six)
+      parameter (pi=3.1415926535897932385d0,twopi=two*pi)
+c
+      parameter (small=1.d-12,small3=small*small*small)
+      parameter (hlxi=one/(pi+small),hlyi=hlxi)
+c
+c---------------------------------------------------------------
+c      PV contour arrays:
+      common /cont01/ xa(npm), ya(npm)
+      common /cont02/ xd(nplm),yd(nplm),dx(nplm),dy(nplm)
+      common /cont03/  a(nplm), b(nplm), c(nplm), d(nplm)
+      common /cont04/  u(nplm), v(nplm), q(nplm)
+      common /cont05/ next(nplm)
+      common /cont06/ i1d(nm),i2d(nm),npd(nm),indd(nm)
+      common /cont07/ i1a(nm),i2a(nm),npa(nm),inda(nm),laya(nm)
+      common /cont08/ il1a(nlev),il2a(nlev),jl1a(nlev),jl2a(nlev)
+c
+c      Grid -> Contour arrays:
+      common /g2cc01/ qa(nh+1,nh+1)
+      common /g2cc02/ xg(nh+1),yg(nh+1)
+      common /g2cc03/ qlev(2*nlevm)
+      common /g2cc04/ ibx(nh,0:1),iby(nh,0:1)
+c
+c      Basic parameters:
+      common /base01/ amu,ell,elf,densf,dm,dmsq,dmi
+      common /base02/ gl,gli,dqi,qoff
+      common /base03/ na,nd,npta,nptd
+      common /base04/ levbeg,levend
+c
+c      Control variables:
+      logical corn(npm)
+      common /ctrl01/ corn
+c
+c #endif

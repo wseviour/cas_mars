@@ -1,0 +1,201 @@
+#include <type.h>
+      subroutine advance(nltsc,
+     $                   sc,
+     $                   scm1,
+     $                   fthesc,
+     $                   ftoposc,
+     $                   fvorsc,
+     $                   eps,
+     $                   m)
+      implicit none
+
+!--------------------------------------------------------------------
+!      Include Files
+!--------------------------------------------------------------------
+#include <dims.h>
+#include <planet.h>          ! now includes phibar (7/30/05)
+#include <nltptrs.h>
+#include <stptrs.h>
+#include <timestep.h>
+#include <timeint.h>
+#include <modeltime.h>
+#include <hyper.h>
+#include <fordamp.h>     
+
+      INT_TYPE  m
+      REAL_TYPE nltsc(0:1,nnlt,m:nn+1,plev)
+      REAL_TYPE sc(0:1,nsp,m:nn,plev)
+      REAL_TYPE scm1(0:1,nsp,m:nn,plev)
+      REAL_TYPE fthesc(0:1,m:nn,plev)
+      REAL_TYPE ftoposc(0:1,m:nn,plev)
+      REAL_TYPE fvorsc(0:1,m:nn,plev)
+      REAL_TYPE eps(m:nn+1)
+
+      INT_TYPE ic, n, k, l
+
+      REAL_TYPE thterm(0:1)
+      REAL_TYPE vorterm(0:1)
+      REAL_TYPE divterm(0:1)
+      REAL_TYPE scp1(0:1,nsp,0:nn)
+
+      REAL_TYPE w, dt, dtinv
+      REAL_TYPE flap, hdutmp, hdttmp, hducor, hdtcor
+      REAL_TYPE Sinv,Sm
+#ifdef FTOPO
+      REAL_TYPE rampdays,ramp
+c      common /toporamp/ ramp
+#endif
+
+c----------------------------------------
+c     Executable Statements
+c----------------------------------------
+
+      dt=dt2/2.d0
+      dtinv=1.d0/dt
+      w = m
+
+c      if(m.eq.0) print*,'in advance; ',ictime
+      if (m.eq.0) write(6,'(a1,$)')'.'
+
+#ifdef FTOPO
+      rampdays=10.d0*SecPerDay
+      if (time_current.lt.rampdays) then
+         ramp=(dsin( (time_current/rampdays)*pi/2.d0 ) )**2
+      else
+         ramp=1.d0
+      endif
+#endif
+
+      do k=1,plev
+
+         do n=m,nn
+
+            flap        =  (n*(n+1))/(Radius*Radius)
+            hdutmp      =  hdufac(n)
+            hdttmp      =  hdtfac(n)
+            hdtcor      =  1.D0/( 1.D0+dt2*hdttmp )
+            hducor      =  1.D0/( 1.D0+dt2*hdutmp )
+            Sinv        =  1.0d0 / ( 1.0d0 + hducor*hdtcor*flap*PhiBar*dt*dt )
+            Sm          =  ( 1.0d0 - hducor*hdtcor*flap*PhiBar*dt*dt )
+
+            if (n.eq.m) then
+               thterm(0)  =  w*nltsc(1,c_p,n,k)-n*eps(n+1)*nltsc(0,d_p,n+1,k) - hdttmp*scm1(0,theta_p,n,k)
+               thterm(1)  = -w*nltsc(0,c_p,n,k)-n*eps(n+1)*nltsc(1,d_p,n+1,k) - hdttmp*scm1(1,theta_p,n,k)
+
+               divterm(0) = -w*nltsc(1,b_p,n,k)-n*eps(n+1)*nltsc(0,a_p,n+1,k) + flap*nltsc(0,e_p,n,k) - hdutmp*scm1(0,div_p,n,k)
+c#ifdef FTOPO
+c     $                                        + flap*ramp*ftoposc(0,n,k)
+c#endif
+               divterm(1) =  w*nltsc(0,b_p,n,k)-n*eps(n+1)*nltsc(1,a_p,n+1,k) + flap*nltsc(1,e_p,n,k) - hdutmp*scm1(1,div_p,n,k)
+c#ifdef FTOPO
+c     $                                        + flap*ramp*ftoposc(1,n,k)
+c#endif
+
+               vorterm(0) =  w*nltsc(1,a_p,n,k)-n*eps(n+1)*nltsc(0,b_p,n+1,k) - hdutmp*scm1(0,vor_p,n,k)
+               vorterm(1) = -w*nltsc(0,a_p,n,k)-n*eps(n+1)*nltsc(1,b_p,n+1,k) - hdutmp*scm1(1,vor_p,n,k)
+
+            else
+               thterm(0)  =  w*nltsc(1,c_p,n,k)-n*eps(n+1)*nltsc(0,d_p,n+1,k) +
+     $                                        (n+1)*eps(n)*nltsc(0,d_p,n-1,k) - hdttmp*scm1(0,theta_p,n,k)
+               thterm(1)  = -w*nltsc(0,c_p,n,k)-n*eps(n+1)*nltsc(1,d_p,n+1,k) +
+     $                                        (n+1)*eps(n)*nltsc(1,d_p,n-1,k) - hdttmp*scm1(1,theta_p,n,k)
+
+               divterm(0) = -w*nltsc(1,b_p,n,k)-n*eps(n+1)*nltsc(0,a_p,n+1,k) +
+     $                                        (n+1)*eps(n)*nltsc(0,a_p,n-1,k) + flap*nltsc(0,e_p,n,k) - hdutmp*scm1(0,div_p,n,k)
+c#ifdef FTOPO
+c     $                                        + flap*ramp*ftoposc(0,n,k)
+c#endif
+               divterm(1) =  w*nltsc(0,b_p,n,k)-n*eps(n+1)*nltsc(1,a_p,n+1,k) +
+     $                                        (n+1)*eps(n)*nltsc(1,a_p,n-1,k) + flap*nltsc(1,e_p,n,k) - hdutmp*scm1(1,div_p,n,k)
+c#ifdef FTOPO
+c     $                                        + flap*ramp*ftoposc(1,n,k)
+c#endif
+
+               vorterm(0) =  w*nltsc(1,a_p,n,k)-n*eps(n+1)*nltsc(0,b_p,n+1,k) +
+     $                                        (n+1)*eps(n)*nltsc(0,b_p,n-1,k) - hdutmp*scm1(0,vor_p,n,k)
+               vorterm(1) = -w*nltsc(0,a_p,n,k)-n*eps(n+1)*nltsc(1,b_p,n+1,k) +
+     $                                        (n+1)*eps(n)*nltsc(1,b_p,n-1,k) - hdutmp*scm1(1,vor_p,n,k)
+
+            end if
+
+c     forcing options:
+
+#ifdef FDRAG
+c     vorticity damping (linear drag):
+            vorterm(0)= vorterm(0) - nltsc(0,f_p,n,k)
+            vorterm(1)= vorterm(1) - nltsc(1,f_p,n,k)
+#endif
+#ifdef FRLAX
+c     thermal relaxation (Newtonian cooling):
+c            if (m.eq.0) write(*,*)fthesc(0,n,k)
+            thterm(0)= thterm(0) + fthesc(0,n,k) - nltsc(0,g_p,n,k)
+            thterm(1)= thterm(1) + fthesc(1,n,k) - nltsc(1,g_p,n,k)
+#endif
+#ifdef FTOPO
+c     topographic forcing:
+            divterm(0)= divterm(0) + flap*ramp*ftoposc(0,n,k)
+            divterm(1)= divterm(1) + flap*ramp*ftoposc(1,n,k)
+#endif
+#ifdef FHEAT
+c     thermal forcing (asymmetric):
+            thterm(0)= thterm(0) + fthpsc(0,n,k)
+            thterm(1)= thterm(1) + fthpsc(1,n,k)
+#endif
+#ifdef FMECH
+c     vorticity forcing (asymmetric, deterministic):
+            vorterm(0)= vorterm(0) + fvorsc(0,n,k)
+            vorterm(1)= vorterm(1) + fvorsc(1,n,k)
+#endif
+#ifdef FSPEC
+c     vorticity forcing (stochastic):
+            vorterm(0)= vorterm(0) + fvorsc(0,n,k)
+            vorterm(1)= vorterm(1) + fvorsc(1,n,k)
+#endif
+
+            scp1(0,vor_p,n)=scm1(0,vor_p,n,k)+dt2*hducor*vorterm(0)
+            scp1(1,vor_p,n)=scm1(1,vor_p,n,k)+dt2*hducor*vorterm(1)
+
+            scp1(0,div_p,n)=Sinv*(Sm*scm1(0,div_p,n,k)
+     $           +dt2*hducor*(divterm(0) + flap*(hdtcor*dt*thterm(0) + scm1(0,theta_p,n,k) )))
+            scp1(1,div_p,n)=Sinv*(Sm*scm1(1,div_p,n,k)
+     $           +dt2*hducor*(divterm(1) + flap*(hdtcor*dt*thterm(1) + scm1(1,theta_p,n,k) )))
+
+            scp1(0,theta_p,n)=Sinv*(Sm*scm1(0,theta_p,n,k)
+     $           +dt2*hdtcor*(thterm(0) - PhiBar*(hducor*dt*divterm(0) + scm1(0,div_p,n,k) )))
+            scp1(1,theta_p,n)=Sinv*(Sm*scm1(1,theta_p,n,k)
+     $           +dt2*hdtcor*(thterm(1) - PhiBar*(hducor*dt*divterm(1) + scm1(1,div_p,n,k) )))
+
+         end do ! Loop in n
+
+
+c     time filter:
+         do n=m,nn
+            if (dofilter) then  
+               do l=1,nsp
+                  do ic=0,1
+                     scm1(ic,l,n,k)=(1.0d0-2.d0*tfc)*sc(ic,l,n,k) + 
+     &                    tfc*(scm1(ic,l,n,k) + scp1(ic,l,n))
+                  end do
+               end do
+            end if
+            sc(0,vor_p,n,k)=scp1(0,vor_p,n)
+            sc(1,vor_p,n,k)=scp1(1,vor_p,n)
+            sc(0,div_p,n,k)=scp1(0,div_p,n)
+            sc(1,div_p,n,k)=scp1(1,div_p,n)
+            sc(0,theta_p,n,k)=scp1(0,theta_p,n)
+            sc(1,theta_p,n,k)=scp1(1,theta_p,n)
+         end do
+
+c     compute u and v from absvor and div:
+         call blduv(sc(0,1,m,k),
+     $              nltsc(0,1,m,k),
+     $              eps,
+     $              m)
+
+      end do     ! end loop over levels
+
+      end
+
+
+
+

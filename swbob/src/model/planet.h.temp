@@ -1,0 +1,20 @@
+#ifndef PLANET_H_
+#define PLANET_H_
+
+#include <type.h>
+#include <constants.h>
+
+      REAL_TYPE Radius
+      REAL_TYPE SecPerDay
+      REAL_TYPE Omega 
+      REAL_TYPE Ldeform
+      REAL_TYPE PhiBar
+
+      parameter(Radius      = XRAD,
+     $          SecPerDay   = XSPD,
+     $          Ldeform     = XLD,
+     $          Omega       = XOM)
+
+      parameter(PhiBar=(2.d0*Omega*Ldeform)**2)
+
+#endif

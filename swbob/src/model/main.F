@@ -1,0 +1,132 @@
+      ! ===========================================================
+      !
+      ! BOB is a multilayer shallow water equation model which
+      ! uses the spherical harmonic transform method. BOB
+      ! is designed to run efficiently on a cluster of multiprocessors.
+      !
+      ! BOB's novel features include
+      !
+      !  * cache blocking
+      !
+      !  * compute on the fly Associated Legendre Polynomials to
+      !    shrink BOB's memory footprint
+      !
+      !  * BOB is enabled for what we call the Multi-Thread Under
+      !    Message Passing (MThuMP) programming model using
+      !    industry standard Open-MP directives and MPI message
+      !    passing calls.
+      !
+      !  * The spherical harmonic transforms are message-parallelized 
+      !    using a standard load-balanced transpose of folded wave-numbers
+      !    and latitude pairs.
+      !  
+      !  * BOB is reduced Gaussian grid enabled.
+      ! 
+      !  * BOB is semi-implicit enabled.
+      !  
+      !  * BOB stands for "Built on Beowulf"!
+      ! 
+      !  Questions or problems with BOB should be addressed to
+      !  Rich Loft, loft@ncar.ucar.edu. We are interested in your 
+      !  experiences and ideas,  but the user should be aware that BOB is 
+      !  What You See Is What You Get (WYSIWYG) software.
+      !  
+      ! ===========================================================
+      !
+      !  Update: August 2002
+      !  Current version maintained by Richard Scott at Columbia University
+      !  Contact scott@appmath.columbia.edu
+      !
+      ! ===========================================================
+      
+       program main
+       implicit none
+
+#include <params.h>
+#include <mpcluster.h>
+#include <modeltime.h>
+#include <timeint.h>
+#include <timestep.h>
+#include <spectral.h>
+#include <fields.h>
+#include <io.h>
+#include <timer.h>
+
+      ! ===========================================================
+      !  External Functions and Routines
+      ! ===========================================================
+
+      INT_TYPE  timeinit         ! -> main calls timeinit,
+                                 ! an integer function that initializes
+                                 ! timestepping info and returns itime0
+      external  timeinit       
+
+      external  initmp           ! -> main calls initmp,
+                                 ! a subroutine that initializes the parallel
+                                 ! region
+
+      external  sht              ! -> main calls sht,
+                                 ! sht performs one timestep of 
+                                 ! the spherical harmonic transform
+
+      external  output           ! -> main calls output,
+                                 ! which outputs restart and diagnostic
+                                 ! files at appropriate times 
+ 
+      external  timeadvance      ! -> main calls timeadvance,
+                                 ! timeadvance advances the model time
+
+      external  haltmp           ! -> main calls haltmp,
+                                 ! which terminates the parallel execution of
+                                 ! the model.
+
+      call initmp(P_NODE,rank,root,nThreads) 
+      call initperf()
+      call initmodel()
+      call hyper
+      call initforsc()
+
+c     compute 0,ntimestep+1 timestep for an initial run; 1,ntimestep+1 for restart
+c     (one extra iteration so physical fields for t+ntimestep*timestep are computed)
+
+
+      itime0=timeinit()
+c     timeinit returns 0 for initial run, 1 for restart run
+c     itime0 stored in modeltime.h
+
+      call timer_start(5)
+
+#ifdef ADAPT
+      itime=itime0
+ 1    call sht()
+      call output()
+      call timeadvance()
+
+      itime=itime+1
+      if (time_current.le.time_stop) goto 1
+c     one extra time-step (scp1 fields for restart) (really necessary?):
+      call sht()
+      call output()
+#else
+      do itime=itime0,ntimestep+1
+         call sht()
+         call output()
+         call timeadvance()      
+      end do
+#endif
+
+      call timer_stop(5)
+      call perfstats()
+      call haltmp('end of BOB')
+
+      end
+
+
+
+
+
+
+
+
+
+

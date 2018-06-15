@@ -1,0 +1,238 @@
+		CONTOUR ADVECTION PROGRAM
+
+This directory contains the Fortran source code for contour advection
+with surgery (CAS). Also included are sample data for a 7 day run.
+
+PLEASE READ THESE NOTES BEFORE PROCEEDING
+(I'd hate to think I've spent time writing this and that no one will
+read it!) .
+
+1. Brief Description
+--------------------
+
+Contour Advection with Surgery (CAS) is a trajectory technique for
+tracing the evolution of material contours in a specified evolving
+flow.  The contours are represented by a series of particles which are
+advected by a specified, gridded, wind distribution.  The resolution
+of the contours is preserved by continually adjusting the number of
+particles, and fine-scale features are produced that are not present
+in the input data.
+
+Full details of the CA technique, including demonstrations of its
+accuracy, are given in Waugh and Plumb (1994) (see also Norton
+1994). Comparisons of results from CA calculations with in situ
+aircraft observations of chemical tracers are shown in, for example,
+Plumb et al. (1994) and Waugh et al. (1994).
+
+The code in this directory is that used in Waugh & Plumb (1994), but
+the code of Norton (1994) is essentially the same. Both codes use the
+node redistribution of Dritschel (1989). The code below also includes
+the surgery algorithm of Dritschel (1989), which may not be in the
+Norton code.
+
+
+2. Two important notes
+----------------------
+
+(A) I have done tests using a simpler particle redistribution scheme
+in which particles are simply added if the separation between
+neighbouring particles exceeds a critical value, and there were only
+small differences between the the two schemes (the differences were at
+a scale that I wouldn't believe the results of either scheme). This
+simpler scheme is used in the NASA GSFC contour advection calculations
+(e.g., Schoeberl & Sparling 1996). So ...
+
+*** If you already have a trajectory calculation working it may be
+just as easy for you to modify it to include the above particle
+redistribution scheme as it is to implement the code in this
+directory. ***
+
+(B) After publishing Waugh & Plumb (1994) I discovered that the time
+to perform surgery (i.e. remove or join contours) is generally much
+longer than the time saved by reducing the number of particles. Hence,
+it is generally slower to do a calculation with surgery than one
+without surgery. So ...
+
+*** I recommend that you turn off the "surgery" component of the code.
+(set dm=0) ***
+
+
+3. Contour Advection routines
+-----------------------------
+
+The source code for contour advection with surgery (CAS) program is
+contained in the files:
+
+ cas.f	: bulk of the code
+ uvw.f	: subroutines to initialize wind grids and to read in wind data
+ cas.h	: "include" common blocks
+
+
+In its present form the required information is read from the standard
+input ("run_params.in" contains sample input).
+
+The initial contours are read from specified file (<infile>), and
+output and some run-time information are written to two separate files
+(<outfile> and <logfile>). Details on format of input/output files are
+below. Information such as time step, output frequency, and surgery
+parameters are contained in the input file.
+
+This code is set up for work with NMC (now NCEP) 2x5 analyses for NH
+(but also have version for global data, and other reanalyses). The routines
+to initialize these grids and to read in the data are in "uvw.f".
+different versions of r_grid* and uvw* for each grid type.
+
+The wind data are expected in daily files in directory winds/ below where code is run.
+To change this directory name change variable <prefix> in main routine.
+
+Three different `re-node' options (irenode) are available:
+Dritschel = as in Dritschel (1989), and used in publications below.
+Schoeberl = simpler scheme outlined above (and used by Mark Schoeberl),
+None      = no addition or redistribution of particles.
+
+The surgery parameter <dm> is read in from the input file. If dm=0 the
+surgery component of particle redistribution algorithm is not
+performed (and code will produce the same results as if dm=1e-10, but
+it will run a lot quicker!). If dm is non-zero there is the option to
+perform the surgery at a specified time interval (multiple of the
+time-step).
+
+Note that the code works in Cartesian space (x,y,z where
+x^2+y^2+z^2=1), and only input/output are in latitude,longitude
+coordinates.
+
+The r_grid routine rescales the velocities for a unit sphere with rotation
+period = 1. (See more below.)
+
+*** Please note that I have not put a lot of effort into making the
+code "user-friendly". I have tried to comment the main section of
+code as much as possible, but the subroutines from David Dristchel's
+code are pretty much in the original form (ie few comments). ***
+
+
+4. Input/output format
+----------------------
+
+Format of input and output file are the same. See circle.in for example.
+
+lines 1 to 3 are text information
+
+line 4 contains following parameters:
+   ndays  = duration of calculation (in days)  	[15]
+   ntstep = number of timesteps per day		[24]
+   tgrid = time between gridded data (in days)	[1.0]
+   tsave  = time between output data (in days)  [.5]
+   amu,dm = contour representation parameters   [0.1, 0.0]
+
+lines 5 to 5+ncont+npt contain contour information for first time frame:
+  line 5 = number of contours, total number of particles, time
+  lines 5+1 to 5+ncont contain
+    number of particles in contour j, starting index of alon and alat
+    array of contour j, index of contour j, redundant field (set to 1.0)
+    for contours j=1,ncont
+  lines 5+ncont+1 to 5+ncont_npt contain
+    longitude and latitude of each particle (i=1,npt)
+
+Above ncont+npt lines then repeating for next time frame (probably
+with different ncont and npt)
+
+
+E.g.
+>>>
+text header 1 (a44)
+text header 2 (a44)
+text header 3 (a44)
+ndays ntstep tgrid tsave amu dm
+ncont npts time						 -----
+npts(1) mb(1) ind(1) om(1)				   ^
+npts(2) mb(2) ind(2) om(2)				   |
+ .       .      .     .					   |
+ .       .      .     .
+npts(ncont) mb(ncont) ind(ncont) om(ncont)		1st time frame
+alon(1) alat(1)
+alon(2) alat(2)
+  .       .
+  .       .						   |
+  .       .						   |
+alon(npts) alat(npts)					 ------
+ncont1 npts1 time1					   ^
+npts(1) mb(1) ind(1) om(1)				   |
+  .       .						2nd time frame
+  .       .
+  .       .
+>>>
+
+
+The file "run_params.in" contains the standard input for a CAS run
+using circle.in as input and winds in /winds/, i.e.  run program by
+typing "cas < run_params.in".
+
+This will produce out file circle.cas (and log circle.log).
+
+The winds used a for Jan 16-28, 1992 at 450K.  Compare evolution wiht
+plots in Plumb et al. (1994). (Note that the input file "circle.in" is
+set up for a 15 day run, but only 12 days of winds in winds/, and
+the cas program will `crash' when trying to open a file for 920129, but
+output for previous 12 days will be OK.)
+
+6. Concluding Remarks
+---------------------
+
+Hopefully the above is clear, and the codes do what I claim they
+do. If not please contact me.
+
+Good Luck!
+
+
+References
+----------
+
+Dritschel, D.G., 1989: Contour dynamics and contour surgery: Numerical
+algorithms for extended, high-resolution modelling of vortex dynamics
+in two-dimensional, inviscid, incompressible flows. {\it Comp. Phys.
+Rep.}, {\bf 10}, 77-146.
+
+Norton, W.A., 1994: Breaking Rossby waves in a model stratosphere
+diagnosed by a vortex-following coordinate system and a contour
+advection technique. {\it J.  Atmos.  Sci.}, {\bf 50}, 654-673.
+
+Plumb, R.A., D.W. Waugh, R.J. Atkinson, M.R. Schoeberl, L.R. Lait,
+P.A.  Newman, E.V. Browell, A. Simmons, and M. Loewenstein,
+1994: Intrusions into the lower stratospheric arctic vortex during the
+winter of 1991/92. {\it J.  Geophys. Res.}, {\bf 99}, 1089-1106.
+
+Schoeberl, M.R., and L.C. Sparling, 1996: Trajectory Modelling.
+
+Waugh, D.W., and R.A. Plumb, 1994: Contour Advection with Surgery: A
+technique for investigating fine scale structure in tracer transport.
+{\it J.  Atmos. Sci.}, {\bf 50}, 714-730.
+
+Waugh, D.W., R.A. Plumb, R.J. Atkinson, M.R. Schoeberl, L.R. Lait,
+P.A.  Newman, M. Loewenstein, D.W. Toohey, L.M. Avallone, C.R.
+Webster, and R.D. May, 1994: Transport of material out of the
+stratospheric Arctic vortex by Rossby wave breaking.  {\it J. Geophys.
+Res.}, {\bf 99}, 1071-1088.
+
+
+===========
+
+fac=2.0*pi/464.57
+
+u=fac*u_in
+v=fac*v_in
+
+Earth:
+radius a=6.371e6 m
+period T=86400 s
+fac = T/a = 0.0135614
+
+{fac=2.0*pi/464.57=0.0135247}
+
+
+# wjms
+Mars:
+radius a = 3396000.0
+period T = 88774.0
+fac = T/a = 0.0261407
+
+{fac = 2.0*pi/240.36 = 0.0261407 }

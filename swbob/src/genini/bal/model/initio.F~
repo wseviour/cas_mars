@@ -1,0 +1,171 @@
+      subroutine initio
+      implicit none
+
+cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+#include <io.h>
+c      character*8   caseid
+c      character*80  inifile
+c      character*80  rstfile
+c      INT_TYPE      rstfreq
+c      common /io/ caseid, inifile, rstfile, rstfreq
+c      INT_TYPE      zavgfreq      ! sampling frequency of zonal averages
+c      common /zavg/ zavgfreq
+#include <modeltime.h>
+#include <mpcluster.h>
+#include <dims.h>
+#include <timeint.h>
+#include <timestep.h>
+cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+
+      INT_TYPE  navu
+      external  navu
+
+      INT_TYPE  lenchr
+      external  lenchr
+
+      INT_TYPE  ierr        ! file io error flag
+
+      character*80 stub
+      character*5 tail,tail_lj
+      character*80 proclogfile
+      character*80 zavgfile
+
+cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+c     Executable Statements
+cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+
+      ! scale I/O frequencies
+      ! if rstfreq or zavgfreq are negative, 
+      ! interpret ABS value as number of days
+      
+      if (rstfreq.lt.0) then
+         rstfreq = -nspday*rstfreq
+      end if
+
+      if (zavgfreq.lt.0) then
+         zavgfreq = -nspday*zavgfreq
+      end if
+
+      call broadcastint(rstfreq,1)
+      call broadcastint(zavgfreq,1)
+      call broadcastint(caseid,8)
+
+      stub="./proclog_"//caseid(1:lenchr(caseid))
+      write(tail,1)rank
+ 1    format(i4)
+      call ljust(tail,tail_lj)
+      proclogfile=stub(1:lenchr(stub))//'.'//tail_lj(1:lenchr(tail_lj))
+      open(unit=MPI_UNIT,
+     $     file=proclogfile,
+     $     form='formatted')
+
+      write(MPI_UNIT,*) "Log File for Process",rank
+
+      write(MPI_UNIT,9000)
+ 9000 format("")
+      write(MPI_UNIT,9010)
+ 9010 format("------------io control data---------------")
+      write(MPI_UNIT,9030)rstfreq
+ 9030 format(" restart tape write frequency       = ",i8)
+      write(MPI_UNIT,9040)zavgfreq
+ 9040 format(" time average write frequency       = ",i8)
+      write(MPI_UNIT,9070)
+ 9070 format("-------------------------------------------")
+
+      write(MPI_UNIT,8000)
+ 8000 format("")
+      write(MPI_UNIT,8010)
+ 8010 format("---------model control data----------------")
+      write(MPI_UNIT,8020)ntimestep
+ 8020 format(" total number of timesteps   = ",i8)
+      write(MPI_UNIT,8030)nspday
+ 8030 format(" number of timesteps/day     = ",i8)
+      write(MPI_UNIT,8040)timestep
+ 8040 format(" timestep (sec)              = ",f12.6)
+      write(MPI_UNIT,8050)tfc
+ 8050 format(" time filter coefficient     = ",f12.6)
+      write(MPI_UNIT,8060)si
+ 8060 format(" semi implicit switch        = ",f12.6)
+      write(MPI_UNIT,8070)sidiff
+ 8070 format(" semi implicit differencing  = ",f12.6)
+      write(MPI_UNIT,8080)
+ 8080 format("-------------------------------------------")
+
+c     Open files for zonal averages:
+
+      stub=caseid(1:lenchr(caseid))//'.zavg'
+      zavgfile=stub(1:lenchr(stub))
+
+      open(unit=26,
+     $     file=zavgfile(1:lenchr(zavgfile))//'.u',
+     $     form="UNFORMATTED",
+     $     status="UNKNOWN",
+     $     iostat=ierr)
+
+      open(unit=27,
+     $     file=zavgfile(1:lenchr(zavgfile))//'.v',
+     $     form="UNFORMATTED",
+     $     status="UNKNOWN",
+     $     iostat=ierr)
+
+      open(unit=28,
+     $     file=zavgfile(1:lenchr(zavgfile))//'.t',
+     $     form="UNFORMATTED",
+     $     status="UNKNOWN",
+     $     iostat=ierr)
+
+#if 0
+      open(unit=29,
+     $     file=zavgfile(1:lenchr(zavgfile))//'.ptf',
+     $     form="UNFORMATTED",
+     $     status="UNKNOWN",
+     $     iostat=ierr)
+
+      open(unit=30,
+     $     file=zavgfile(1:lenchr(zavgfile))//'.amf',
+     $     form="UNFORMATTED",
+     $     status="UNKNOWN",
+     $     iostat=ierr)
+
+      open(unit=31,
+     $     file=zavgfile(1:lenchr(zavgfile))//'.eke',
+     $     form="UNFORMATTED",
+     $     status="UNKNOWN",
+     $     iostat=ierr)
+#endif
+
+c     various norms:
+
+      open(unit=78,
+     $     file=caseid(1:lenchr(caseid))//'.eke',
+     $     form="FORMATTED",
+     $     status="UNKNOWN",
+     $     iostat=ierr)
+      
+#ifdef PS
+      open(unit=80,
+     $     file=caseid(1:lenchr(caseid))//'.normz',
+     $     form="FORMATTED",
+     $     status="UNKNOWN",
+     $     iostat=ierr)
+      
+      open(unit=81,
+     $     file=caseid(1:lenchr(caseid))//'.normzs',
+     $     form="FORMATTED",
+     $     status="UNKNOWN",
+     $     iostat=ierr)
+
+      open(unit=83,
+     $     file=caseid(1:lenchr(caseid))//'.normgzs',
+     $     form="FORMATTED",
+     $     status="UNKNOWN",
+     $     iostat=ierr)
+      
+      open(unit=84,
+     $     file=caseid(1:lenchr(caseid))//'.normws',
+     $     form="FORMATTED",
+     $     status="UNKNOWN",
+     $     iostat=ierr)
+#endif
+
+      end

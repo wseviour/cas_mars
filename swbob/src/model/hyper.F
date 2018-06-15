@@ -1,0 +1,47 @@
+#include <type.h>
+      subroutine hyper
+
+c compute hyperdiffusion factors: hdufac, hdtfac
+c and put these in hyper.h for use in advance
+
+      implicit none
+
+#include <dims.h>           ! INT_TYPE nn 
+#include <io.h>
+#include <hyper.h>
+
+c-----------------------------------------------------------------
+c     Local declarations
+c-----------------------------------------------------------------
+      INT_TYPE n,nnp1
+      REAL_TYPE QHDAMP,QLDAMP
+c------------------------------------------------------
+c      Executable statements
+c------------------------------------------------------
+
+      ! BUILT IMPLICIT CORRECTION FACTORS !
+
+      QHDAMP=nuhi/(DBLE(nn*(nn+1))**(delhi/2.d0))
+      QLDAMP=nulo
+
+c     diffusion arrays:
+c     TODO - check effect on solid body rotation:
+c      do n=0,nn
+      do n=2,nn
+         nnp1=n*(n+1)
+         hdtfac(n)=QHDAMP*DBLE(nnp1)**(delhi/2.d0) + QLDAMP*DBLE(nnp1)**(dello/2.d0)
+#ifdef HDISS
+c     no large-scale dissipation on vor/div:
+         hdufac(n)=QHDAMP*DBLE(nnp1-2)**(delhi/2.d0)
+#else
+         hdufac(n)=QHDAMP*DBLE(nnp1-2)**(delhi/2.d0) + QLDAMP*DBLE(nnp1-2)**(dello/2.d0)
+#endif
+      enddo
+      hdtfac(0)=0.d0
+      hdtfac(1)=0.d0
+      hdufac(0)=0.d0
+      hdufac(1)=0.d0
+
+      return
+      end
+

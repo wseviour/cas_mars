@@ -1,0 +1,184 @@
+      subroutine bldnlt(phy,
+     $                  nlt,
+     $                  pktcoef,
+     $                  lat,
+     $                  lon,
+     $                  umax,
+     $                  vomega)
+c----------------------------------------------------------
+c     CALLED by: fourier
+c----------------------------------------------------------
+      implicit none
+
+#include <dims.h>
+#include <stptrs.h>
+#include <nltptrs.h>
+#include <vertstruct.h>
+c------------------------------------------------------------ 
+c     Local Declarations
+c------------------------------------------------------------ 
+      REAL_TYPE phy(nlon,nlat2,nphy,0:1,plev)
+      REAL_TYPE nlt(nlon,nlat2,nnlt,0:1,plev)
+      REAL_TYPE pktcoef(nlat2,0:1,plev)
+      REAL_TYPE vomega(nlon,nlat2,0:1,0:plev)
+      REAL_TYPE lat(nlat2), lon(nlon)
+      REAL_TYPE inv2dp
+
+      INT_TYPE i,j,k,ins
+      REAL_TYPE cslat(nlat2)
+      REAL_TYPE umax
+c------------------------------------------------------------ 
+c     Executable statements
+c------------------------------------------------------------ 
+
+c     Compute local zonal CFL
+#if 1
+      do k=1,plev
+         do ins=0,1
+            do j=1,nlat2
+               do i=1,nlon
+                  umax=DMAX1(umax,DABS( phy(i,j,u_p,ins,k)/DCOS(lat(j)) ))
+               end do
+            end do
+         end do
+      end do
+#endif
+      do j=1,nlat2
+         cslat(j)=DCOS(lat(j))
+      end do
+
+c     Initialize vertical velocity which is computed on the fly
+      do k=0,plev
+         do ins=0,1
+            do j=1,nlat2
+               do i=1,nlon
+                  vomega(i,j,ins,k)=0.0d0
+               enddo
+            enddo
+         enddo
+      enddo
+
+      do k=1,plev
+         inv2dp=1.0d0/(2.0d0*dp(k))
+
+cg vomega.ne.0 at plev+1/2:
+cg         if(k.ne.plev)then
+
+            do ins=0,1
+               do j=1,nlat2
+                  do i=1,nlon
+
+                     vomega(i,j,ins,k)=vomega(i,j,ins,k-1)-dp(k)*phy(i,j,div_p,ins,k)
+
+                     if(k.eq.1)then
+
+                     nlt(i,j,a_p,ins,k)=phy(i,j,u_p,ins,k)*phy(i,j,vor_p,ins,k)
+     $                    + phy(i,j,v_p,ins,k)*phy(i,j,div_p,ins,k)
+     $                    + inv2dp*( vomega(i,j,ins,k)*( phy(i,j,v_p,ins,k+1)+phy(i,j,v_p,ins,k) ) )
+
+                     nlt(i,j,b_p,ins,k)=phy(i,j,v_p,ins,k)*phy(i,j,vor_p,ins,k)
+     $                    - phy(i,j,u_p,ins,k)*phy(i,j,div_p,ins,k)
+     $                    - inv2dp*( vomega(i,j,ins,k)*( phy(i,j,u_p,ins,k+1)+phy(i,j,u_p,ins,k) ) )
+                     
+                     nlt(i,j,c_p,ins,k)=phy(i,j,u_p,ins,k)*phy(i,j,phi_p,ins,k)
+                     
+                     nlt(i,j,d_p,ins,k)=phy(i,j,v_p,ins,k)*phy(i,j,phi_p,ins,k)
+                     
+                     nlt(i,j,e_p,ins,k)=(phy(i,j,u_p,ins,k)*phy(i,j,u_p,ins,k)+
+     $                    phy(i,j,v_p,ins,k)*phy(i,j,v_p,ins,k))
+     $                                /(2.0d0*cslat(j)*cslat(j))
+
+                     nlt(i,j,f_p,ins,k)= 0.d0 
+     $                    - inv2dp*( vomega(i,j,ins,k)*( phy(i,j,theta_p,ins,k+1)+phy(i,j,theta_p,ins,k) ) )
+
+                     nlt(i,j,g_p,ins,k)= pktcoef(j,ins,k)*phy(i,j,them1_p,ins,k)
+
+                     else
+
+                     nlt(i,j,a_p,ins,k)=phy(i,j,u_p,ins,k)*phy(i,j,vor_p,ins,k)
+     $                    + phy(i,j,v_p,ins,k)*phy(i,j,div_p,ins,k)
+     $                    + inv2dp*( vomega(i,j,ins,k)*( phy(i,j,v_p,ins,k+1)+phy(i,j,v_p,ins,k) )
+     $                    -vomega(i,j,ins,k-1)*( phy(i,j,v_p,ins,k)+phy(i,j,v_p,ins,k-1) ) )
+
+
+                     nlt(i,j,b_p,ins,k)=phy(i,j,v_p,ins,k)*phy(i,j,vor_p,ins,k)
+     $                    - phy(i,j,u_p,ins,k)*phy(i,j,div_p,ins,k)
+     $                    - inv2dp*( vomega(i,j,ins,k)*( phy(i,j,u_p,ins,k+1)+phy(i,j,u_p,ins,k) )
+     $                    -vomega(i,j,ins,k-1)*( phy(i,j,u_p,ins,k)+phy(i,j,u_p,ins,k-1) ) )
+                     
+                     
+                     nlt(i,j,c_p,ins,k)=phy(i,j,u_p,ins,k)*phy(i,j,phi_p,ins,k)
+                     
+                     nlt(i,j,d_p,ins,k)=phy(i,j,v_p,ins,k)*phy(i,j,phi_p,ins,k)
+                     
+                     nlt(i,j,e_p,ins,k)=(phy(i,j,u_p,ins,k)*phy(i,j,u_p,ins,k)+
+     $                    phy(i,j,v_p,ins,k)*phy(i,j,v_p,ins,k))
+     $                                /(2.0d0*cslat(j)*cslat(j))
+
+                     nlt(i,j,f_p,ins,k)= 0.d0
+     $                    - inv2dp*( vomega(i,j,ins,k)*( phy(i,j,theta_p,ins,k+1)+phy(i,j,theta_p,ins,k) )
+     $                    -vomega(i,j,ins,k-1)*( phy(i,j,theta_p,ins,k)+phy(i,j,theta_p,ins,k-1) ) )
+
+                     nlt(i,j,g_p,ins,k)= pktcoef(j,ins,k)*phy(i,j,them1_p,ins,k)
+
+                     endif
+                  end do
+               end do
+            end do
+
+cg vomega.ne.0 at plev+1/2:
+#if 0
+         else ! k=plev
+            do ins=0,1
+               do j=1,nlat2
+                  do i=1,nlon
+
+                     vomega(i,j,ins,k)=vomega(i,j,ins,k-1)-dp(k)*phy(i,j,div_p,ins,k)
+
+                     nlt(i,j,a_p,ins,k)=phy(i,j,u_p,ins,k)*phy(i,j,vor_p,ins,k)
+     $                    + phy(i,j,v_p,ins,k)*phy(i,j,div_p,ins,k)
+     $                    + inv2dp*(-vomega(i,j,ins,k-1)*( phy(i,j,v_p,ins,k)+phy(i,j,v_p,ins,k-1) ) )
+
+                     nlt(i,j,b_p,ins,k)=phy(i,j,v_p,ins,k)*phy(i,j,vor_p,ins,k)
+     $                    - phy(i,j,u_p,ins,k)*phy(i,j,div_p,ins,k)
+     $                    - inv2dp*(-vomega(i,j,ins,k-1)*( phy(i,j,u_p,ins,k)+phy(i,j,u_p,ins,k-1) ) )
+                     
+                     
+                     nlt(i,j,c_p,ins,k)=phy(i,j,u_p,ins,k)*phy(i,j,phi_p,ins,k)
+                     
+                     nlt(i,j,d_p,ins,k)=phy(i,j,v_p,ins,k)*phy(i,j,phi_p,ins,k)
+                     
+                     nlt(i,j,e_p,ins,k)=(phy(i,j,u_p,ins,k)*phy(i,j,u_p,ins,k)+
+     $                    phy(i,j,v_p,ins,k)*phy(i,j,v_p,ins,k))
+     $                                /(2.0d0*cslat(j)*cslat(j))
+
+                     nlt(i,j,f_p,ins,k)=0.d0
+     $                    - inv2dp*(-vomega(i,j,ins,k-1)*( phy(i,j,theta_p,ins,k)+phy(i,j,theta_p,ins,k-1) ) )
+
+                     nlt(i,j,g_p,ins,k)= pktcoef(j,ins,k)*phy(i,j,them1_p,ins,k)
+                  end do
+               end do
+            end do
+
+         endif
+#endif
+      end do ! loop k=1,plev
+
+      end 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

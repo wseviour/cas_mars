@@ -1,0 +1,47 @@
+#ifndef PLANET_H_
+#define PLANET_H_
+
+#include <type.h>
+#include <constants.h>
+
+      REAL_TYPE Radius
+      REAL_TYPE Gravity
+      REAL_TYPE LengthOfDay
+
+      REAL_TYPE SecPerDay
+      REAL_TYPE Omega 
+
+      REAL_TYPE PhiBar, Ldeform
+
+#if 0
+      REAL_TYPE rconst, cp
+      REAL_TYPE t0eq, reffac, pbot, sigmab
+#endif
+
+#if 0
+      parameter(Radius      = 6.371D6,     ! radius of earth (m)
+     $          Gravity     = 9.81D0,    ! earth surface gravity (m/s^2)
+     $          LengthOfDay = 24.0D0,    !  2.0*Pi/(.262512))      ! earth day (hrs)
+     $          rconst      = 287.D0,    
+     $          t0eq        = 300.D0,    
+     $          reffac      = 2.D0,      ! in verini to compute tzref
+     $          cp          = 1004.D0,
+     $          pbot        = 1.0D5,    
+     $          sigmab      = 0.7D0)
+
+      parameter(SecPerDay=3600.D0*LengthOfDay,
+     $          Omega=2.D0*Pi/SecPerDay)
+
+      parameter( PhiBar=100000.)    ! m^2/s^2
+#endif
+
+      parameter(Radius      = 1.d0,       ! radius of planet
+     $          Gravity     = 1.d0,       ! not used
+     $          Omega       = 2.0d0*Pi,   ! planetary rotation rate
+     $          SecPerDay   = 1.d0,
+     $          LengthOfDay = 1.d0)       ! not used
+
+     parameter(Ldeform=XLD)
+     parameter(PhiBar=(2.d0*Omega*Ldeform)**2)
+
+#endif

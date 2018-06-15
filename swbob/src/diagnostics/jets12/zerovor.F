@@ -1,0 +1,48 @@
+      subroutine zerovor(scvor)
+
+c     zero vorticity spectral coefficients in spectral sectors
+
+      implicit none
+
+#include <dims.h>
+#include <stptrs.h>
+#include <scptrs.h>
+#include <decomp.h>
+#include <mpcluster.h>
+#include <specuv.h>
+
+      REAL_TYPE scvor(0:1,nsp,nsc*plev)
+      INT_TYPE m,mch,k,sc_p,n,i
+
+c     scvor(.,1,.) retains all coefs
+c     scvor(.,2,.) retains zonal coefs (zeros isotropic coefs)
+c     scvor(.,3,.) retains isotropic coefs (zeros zonal coefs)
+
+c     (also remove planetary vorticity)
+
+      do mch=0,1
+         do m=mbeg(mch,rank),mend(mch,rank)
+            do k=1,plev
+               sc_p=1+plev*scptr(m)+(nn+1-m)*(k-1)
+               do n=m,nn
+                  if ((m.le.1).and.(n.eq.1)) then
+                     scvor(0,1,sc_p+n-m)=scvor(0,1,sc_p+n-m)-fcor(m)
+                  endif
+                  scvor(0,2,sc_p+n-m)=scvor(0,1,sc_p+n-m)
+                  scvor(1,2,sc_p+n-m)=scvor(1,1,sc_p+n-m)
+                  scvor(0,3,sc_p+n-m)=scvor(0,1,sc_p+n-m)
+                  scvor(1,3,sc_p+n-m)=scvor(1,1,sc_p+n-m)
+                  if (n.lt.(5*m)) then
+                     scvor(0,2,sc_p+n-m)=0.d0
+                     scvor(1,2,sc_p+n-m)=0.d0
+                  else
+                     scvor(0,3,sc_p+n-m)=0.d0
+                     scvor(1,3,sc_p+n-m)=0.d0
+                  endif
+               enddo
+            enddo
+         enddo
+      enddo
+
+      return
+      end

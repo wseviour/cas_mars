@@ -1,0 +1,17 @@
+#ifndef EQUILIB_H_
+#define EQUILIB_H_
+
+#include <dims.h>
+
+      ! zonally averaged fields at equilibria
+
+      REAL_TYPE ubar(plat,plev)
+      REAL_TYPE vbar(plat,plev)
+      REAL_TYPE hbar(plat,plev)
+      REAL_TYPE zbar(plat,plev)
+      REAL_TYPE ubarnode0(nlat2*2*plev,jelemd)
+      REAL_TYPE ubarnode00(nlat2*2*plev,jelemd)
+
+      common /equibar/ ubar,vbar,hbar,zbar,ubarnode0,ubarnode00
+
+#endif

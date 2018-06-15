@@ -1,0 +1,89 @@
+      subroutine diag(itime,itime0)
+      implicit none
+
+#include <io.h>
+#include <mpcluster.h>
+#include <diag.h>
+#include <diagptrs.h>
+#include <modeltime.h>
+#include <timestep.h>
+#include <uspec.h>
+#include <dims.h>
+#include <planet.h>
+
+      INT_TYPE itime,itime0,icount,nacc
+      common /diagctr/icount,nacc
+
+ccccccccccccccccccccccccccccccccccccccccccccccc
+
+      if (itime.eq.itime0) then                       ! beginning of run
+         icount=nint(time_start/SecPerDay)
+         open(55,file='field-output-times',form='formatted')
+         if(itime.eq.0) then                          !initial condition
+            call znl
+            call ell
+            call fld(icount)
+            write(55,*) icount, itime, time_current, time_current/secperday
+            icount=icount+nint(time_out/SecPerDay)
+c            write(55,*) icount,time_out,nint(time_out/SecPerDay)
+         else                                         !restart
+            icount=nint(time_start/(fldfreq*timestep))
+            if (rank.eq.root) then
+               write(*,*) ""
+               write(*,*) "initial icount = ",icount
+            endif
+         endif
+         nacc=0
+c         icount=nint((time_start+time_out)/SecPerDay)
+      else if ((itime0.eq.0).and.(itime.eq.1)) then
+c        do nothing: first half step of an initial condition run
+      else
+c     accumulate zonal diagnostics if necessary (use instead of zavg_diag):
+c         call zacc_diag(nacc,itime)
+c
+#ifdef ADAPT
+c     norms every time_nrm:    ! not implemented, adapt from swtestcase...
+c         if (mod(time_current,time_nrm).lt.(dt2/2.d0)) then 
+c            call nrm
+c         endif
+c     zonal means and spectra every time_zon:
+         if (mod(time_current,time_zon).lt.(dt2/2.d0)) then 
+            call znl
+c            call spc
+            call ell
+c            call con
+         endif
+c     physical fields every time_out:
+         if (mod(time_current,time_out).lt.(dt2/2.d0)) then
+            call fld(icount)
+            icount=icount+nint(time_out/SecPerDay)
+         endif
+#else
+c         if (mod(itime,nrmfreq).eq.0) then 
+c            call nrm
+c         endif
+         if (mod(itime-1,zonfreq).eq.0) then 
+            call znl
+c            call spc
+            call ell
+c            call con
+         endif
+         if (mod(itime-1,fldfreq).eq.0) then
+            call fld(icount)
+            write(55,*) icount, itime, time_current, time_current/secperday
+            call flush(55)
+            icount=icount+nint(time_out/SecPerDay)
+         endif
+#endif
+
+c     test whether equilibrium has been reached, dump fields, update forcing:
+#ifdef FMECH
+c         call equilibfmech
+#endif
+#ifdef FHEAT
+c         call equilibfheat
+#endif
+
+      endif
+
+      end 

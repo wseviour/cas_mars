@@ -1,0 +1,222 @@
+      subroutine forsc(fvorsc,sc)
+
+c     called from spectral.F
+
+      implicit none
+
+#include <dims.h>
+#include <stptrs.h>
+#include <scptrs.h>
+#include <decomp.h>
+#include <mpcluster.h>
+#include <planet.h>
+#include <fordamp0.h>
+#include <timestep.h>
+#include <specuv.h>
+
+      REAL_TYPE sc(0:1,nsp,nsc*plev)
+      REAL_TYPE fvorsc(0:1,nsc*plev)
+      REAL_TYPE fran0,fran1,fnorm
+      REAL_TYPE v0,v1,vnorm,psi0,psi1,psif,psift,psistart
+#ifdef GAUSS
+      REAL_TYPE rnd(0:1,0:nn,0:nn),vfor(0:1,0:nn,0:nn)
+#else
+      REAL_TYPE rnd(0:1,nf0:nf1,0:nn),vfor(0:1,nf0:nf1,0:nn)
+#endif
+      REAL_TYPE fspec(0:nn)
+c      REAL_TYPE rnd(0:1,0:nn),vfor(0:1,0:nn)
+      INT_TYPE m,mch,k,sc_p,n
+
+      REAL_TYPE zero,one,small
+      parameter(zero=0.d0,one=1.d0,small=1.0d-12)
+
+      REAL_TYPE ffac
+
+c     time-correlation (gamma=correlation radius):
+      fcor0=1.d0-timestep/max(gamma,timestep)
+      fcor1=sqrt(1.d0-fcor0**2)
+
+c     spectrum of forcing
+      do n=0,nn
+#ifdef GAUSS         
+         fspec(n)=exp(-(float(n-nf0)/float(nf1))**2)
+#else
+         fspec(n)=1.d0
+#endif
+      enddo
+
+c      write(*,*) fcor0
+
+c     fill random arrays:
+      if (rank.eq.root) then
+#ifdef GAUSS
+         do n=0,nn
+#else
+         do n=nf0,nf1
+#endif
+            do m=0,n
+               rnd(0,n,m)=zero
+               rnd(1,n,m)=zero
+            enddo
+         enddo
+#ifdef GAUSS
+c         do n=0,nn
+         do n=nf0,nf1
+#else
+         do n=nf0,nf1
+#endif
+            do m=0,n
+               call myrand(fran0)
+               call myrand(fran1)
+               fnorm=one/sqrt(fran0**2+fran1**2)
+               rnd(0,n,m)=fran0*fnorm
+               rnd(1,n,m)=fran1*fnorm
+            enddo
+         enddo
+      endif
+ 1    format(a40,1x,i4,1x,2(1x,f8.4))
+#ifdef GAUSS
+      call broadcastreal(rnd,2*nn*(nn+1))
+#else
+      call broadcastreal(rnd,2*(nf1-nf0+1)*(nn+1))
+#endif
+
+
+c     update forcing:
+
+      if (gamma.gt.timestep) then
+c     (markovian)
+
+c         write(*,*) 'markovian'
+
+      psif=zero
+      psift=zero
+      do mch=0,1
+         do m=mbeg(mch,rank),mend(mch,rank)
+            do k=1,plev
+               sc_p=1+plev*scptr(m)+(nn+1-m)*(k-1)
+#ifdef GAUSS
+               do n=m,nn
+#else
+               do n=max(m,nf0),nf1
+#endif
+                  v0=fvorsc(0,sc_p+n-m)
+                  v1=fvorsc(1,sc_p+n-m)
+                  vnorm=one/sqrt(v0**2+v1**2+small)
+                  v0=v0*vnorm
+                  v1=v1*vnorm
+                  vfor(0,n,m)=fcor0*v0+fcor1*rnd(0,n,m)
+                  vfor(1,n,m)=fcor0*v1+fcor1*rnd(1,n,m)
+                  if ((n.eq.1).and.(m.le.1)) then
+                     psi0=annp1(n)*(sc(0,vor_p,sc_p+n-m)-fcor(m))
+                  else
+                     psi0=annp1(n)*sc(0,vor_p,sc_p+n-m)
+                  endif
+                  psi1=annp1(n)*sc(1,vor_p,sc_p+n-m)
+c     account for -n<=m<=n modes:
+                  if (m.eq.0) then 
+                     psif=psif+vfor(0,n,m)*psi0+vfor(1,n,m)*psi1
+                  else
+                     psif=psif+2.d0*(vfor(0,n,m)*psi0+vfor(1,n,m)*psi1)
+                  endif
+               enddo
+            enddo
+         enddo
+      enddo
+      call psumreal(psif,psift,1)
+      call broadcastreal(psift,1)
+      psif=psift
+      psistart=0.0001d0
+      if (abs(psif).gt.psistart) then
+c         if (rank.eq.root) write(*,*) psif
+         do mch=0,1
+            do m=mbeg(mch,rank),mend(mch,rank)
+               do k=1,plev
+                  sc_p=1+plev*scptr(m)+(nn+1-m)*(k-1)
+#ifdef GAUSS
+                  do n=m,nn
+#else
+                  do n=max(m,nf0),nf1
+#endif
+                     fvorsc(0,sc_p+n-m)=eps0*fspec(n)*vfor(0,n,m)/psif
+                     fvorsc(1,sc_p+n-m)=eps0*fspec(n)*vfor(1,n,m)/psif
+                  enddo
+               enddo
+            enddo
+         enddo
+      else
+c         if (rank.eq.root) write(*,*) 'psif,psistart = ',psif,psistart
+         do mch=0,1
+            do m=mbeg(mch,rank),mend(mch,rank)
+               do k=1,plev
+                  sc_p=1+plev*scptr(m)+(nn+1-m)*(k-1)
+#ifdef GAUSS
+                  do n=m,nn
+#else
+                  do n=max(m,nf0),nf1
+#endif
+                     fvorsc(0,sc_p+n-m)=eps0*fspec(n)*vfor(0,n,m)/psistart
+                     fvorsc(1,sc_p+n-m)=eps0*fspec(n)*vfor(1,n,m)/psistart
+                  enddo
+               enddo
+            enddo
+         enddo
+      endif
+c
+      else
+c     (delta-correlated)
+
+c         write(*,*) 'delta'
+
+      do mch=0,1
+         do m=mbeg(mch,rank),mend(mch,rank)
+            do k=1,plev
+               sc_p=1+plev*scptr(m)+(nn+1-m)*(k-1)
+               do n=max(m,nf0),nf1
+c                  ffac=sqrt((n+1)*eps0/(timestep*(nf1-nf0)))  ! no 2pi; diff from planar
+                  ffac=sqrt(2.0*n*(n+1)*eps0/(timestep*(nf1-nf0+1)*(2*n+1)))
+                  fvorsc(0,sc_p+n-m)=ffac*rnd(0,n,m)
+                  fvorsc(1,sc_p+n-m)=ffac*rnd(1,n,m)
+               enddo
+            enddo
+         enddo
+      enddo
+
+      endif
+
+
+
+C       psif=zero
+C       psift=zero
+C       do mch=0,1
+C          do m=mbeg(mch,rank),mend(mch,rank)
+C             do k=1,plev
+C                sc_p=1+plev*scptr(m)+(nn+1-m)*(k-1)
+C                do n=max(m,nf0),nf1
+C                   if ((n.eq.1).and.(m.le.1)) then
+C                      psi0=annp1(n)*(sc(0,vor_p,sc_p+n-m)-fcor(m))
+C                   else
+C                      psi0=annp1(n)*sc(0,vor_p,sc_p+n-m)
+C                   endif
+C                   psi1=annp1(n)*sc(1,vor_p,sc_p+n-m)
+C                   psif=psif+fvorsc(0,sc_p+n-m)*psi0+fvorsc(1,sc_p+n-m)*psi1
+C                   psift=psift+annp1(n)*(fvorsc(0,sc_p+n-m)**2+fvorsc(1,sc_p+n-m)**2)
+C                enddo
+C             enddo
+C          enddo
+C       enddo
+C       psift=psift*0.5d0*timestep
+C       write(*,*) ' psif,psift' , psif/eps0,psift/eps0
+
+c      do mch=0,1
+c         do m=mbeg(mch,rank),mend(mch,rank)
+c            do k=1,plev
+c               sc_p=1+plev*scptr(m)+(nn+1-m)*(k-1)
+c               write(*,*) m,sc_p,fvorsc(0,sc_p+nf-m),fvorsc(1,sc_p+nf-m)
+c            enddo
+c         enddo
+c      enddo
+
+
+      return
+      end
