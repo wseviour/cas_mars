@@ -1,5 +1,9 @@
 # Contour advection calculations for Mars polar vortex
 
+## Getting started
+
+First try compiling the contour advection code. In directory `cas`, run `gfortran -o cas cas.f uvw.f`. Now see if it will run: try `./cas < run_params_will.in`. This should produce a file `output.cas`
+
 ## Directory structure
 
 * `cas/` : code for running contour advection (CA)
@@ -33,4 +37,16 @@
 
 ## swbob run naming convention
 
-A typical file
+A typical filename from swbob output (and other files derived from this output) might look like the following:
+
+`res_test57.-70.-nu4-urlx-kt0.0.c-0020sat200.0.T85`
+
+Here's what it all means:
+
+`res_test` : name of the type of run. I called it this when I was testing different resolutions, should probably update to something more descriptive.
+`57.-70.` : inner and outer latitudes of the initial annular vortex
+`nu4-urlx` : doesn't change among runs
+`kt0.0` : relaxation parameter. In this case, 0 relaxation. A relaxation parameter 4.0 would mean a timescale of 0.25 days (i.e. kt = 1/t_relax).
+`c-0020`: angular frequency of the tropography
+`sat200.0`: maximum topography amplitude
+`T85`: spectral resolution
