@@ -1,0 +1,18 @@
+pro getdataxyic,nlon,dir,job,field,u
+
+nlat=nlon/2
+
+dummy=fltarr(long(nlon)*nlat)
+u=fltarr(nlon,nlat)
+
+openr,1,'/home/flare-s2/scott/bobdata/'+dir+'/'+job+'/'+job+'.'+field+'.'+tstr,/f77_unformatted
+openr,1,dir+'/'+job+'/ic.'+field,/f77_unformatted
+
+readu,1,dummy
+u(*,*)=reform(dummy,nlon,nlat)
+
+close,1
+
+print,'got data: '+field
+
+end

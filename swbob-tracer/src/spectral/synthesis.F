@@ -1,0 +1,91 @@
+      subroutine synthesis(nltsc,sc,scm1,fc,P,m)
+      implicit none
+
+#include <dims.h>
+#include <nltptrs.h>
+#include <stptrs.h>
+
+      INT_TYPE m
+
+      REAL_TYPE nltsc(0:1,nnlt,m:nn+1,plev)
+      REAL_TYPE sc(0:1,nsp,m:nn,plev)
+      REAL_TYPE scm1(0:1,nsp,m:nn,plev)
+      REAL_TYPE fc(0:1,nlat2,nsyn,0:1,plev)
+      REAL_TYPE P(nlat2,0:nn+1)
+
+      INT_TYPE j,k,n,ioe
+#if 0
+      do k=1,plev
+         do ioe=0,1
+            do n=m+ioe,nn,2
+               do j=1,nlat2
+
+                  fc(0,j,vor_p,ioe,k)=fc(0,j,vor_p,ioe,k)+ sc(0,vor_p,n,k)*P(j,n)
+                  fc(1,j,vor_p,ioe,k)=fc(1,j,vor_p,ioe,k)+ sc(1,vor_p,n,k)*P(j,n)
+
+                  fc(0,j,div_p,ioe,k)=fc(0,j,div_p,ioe,k)+ sc(0,div_p,n,k)*P(j,n)
+                  fc(1,j,div_p,ioe,k)=fc(1,j,div_p,ioe,k)+ sc(1,div_p,n,k)*P(j,n)
+
+                  fc(0,j,theta_p,ioe,k)=fc(0,j,theta_p,ioe,k)+ sc(0,theta_p,n,k)*P(j,n)
+                  fc(1,j,theta_p,ioe,k)=fc(1,j,theta_p,ioe,k)+ sc(1,theta_p,n,k)*P(j,n)
+
+                  fc(0,j,u_p,ioe,k)=fc(0,j,u_p,ioe,k)+ nltsc(0,u_p,n,k)*P(j,n)
+                  fc(1,j,u_p,ioe,k)=fc(1,j,u_p,ioe,k)+ nltsc(1,u_p,n,k)*P(j,n)
+
+                  fc(0,j,v_p,ioe,k)=fc(0,j,v_p,ioe,k)+ nltsc(0,v_p,n,k)*P(j,n)
+                  fc(1,j,v_p,ioe,k)=fc(1,j,v_p,ioe,k)+ nltsc(1,v_p,n,k)*P(j,n)
+
+               end do
+            end do
+         end do
+         call symb(fc(0,1,1,0,k))
+      end do
+#endif
+#if 1
+      do k=1,plev
+         do ioe=0,1
+            do n=m+ioe,nn,2
+               do j=1,nlat2
+
+                  fc(0,j,vor_p,ioe,k)=fc(0,j,vor_p,ioe,k)+ sc(0,vor_p,n,k)*P(j,n)
+                  fc(1,j,vor_p,ioe,k)=fc(1,j,vor_p,ioe,k)+ sc(1,vor_p,n,k)*P(j,n)
+
+                  fc(0,j,div_p,ioe,k)=fc(0,j,div_p,ioe,k)+ sc(0,div_p,n,k)*P(j,n)
+                  fc(1,j,div_p,ioe,k)=fc(1,j,div_p,ioe,k)+ sc(1,div_p,n,k)*P(j,n)
+
+                  fc(0,j,theta_p,ioe,k)=fc(0,j,theta_p,ioe,k)+ sc(0,theta_p,n,k)*P(j,n)
+                  fc(1,j,theta_p,ioe,k)=fc(1,j,theta_p,ioe,k)+ sc(1,theta_p,n,k)*P(j,n)
+
+c     rks - added tracer field, referenced by sig_p:
+                  fc(0,j,sig_p,ioe,k)=fc(0,j,sig_p,ioe,k)+ sc(0,sig_p,n,k)*P(j,n)
+                  fc(1,j,sig_p,ioe,k)=fc(1,j,sig_p,ioe,k)+ sc(1,sig_p,n,k)*P(j,n)
+
+                  fc(0,j,them1_p,ioe,k)=fc(0,j,them1_p,ioe,k)+ scm1(0,theta_p,n,k)*P(j,n)
+                  fc(1,j,them1_p,ioe,k)=fc(1,j,them1_p,ioe,k)+ scm1(1,theta_p,n,k)*P(j,n)
+
+                  fc(0,j,vorm1_p,ioe,k)=fc(0,j,vorm1_p,ioe,k)+ scm1(0,vor_p,n,k)*P(j,n)
+                  fc(1,j,vorm1_p,ioe,k)=fc(1,j,vorm1_p,ioe,k)+ scm1(1,vor_p,n,k)*P(j,n)
+
+               end do
+            end do
+            do n=m+ioe,nn+1,2
+               do j=1,nlat2
+
+                  fc(0,j,u_p,ioe,k)=fc(0,j,u_p,ioe,k)+ nltsc(0,u_p,n,k)*P(j,n)
+                  fc(1,j,u_p,ioe,k)=fc(1,j,u_p,ioe,k)+ nltsc(1,u_p,n,k)*P(j,n)
+
+                  fc(0,j,v_p,ioe,k)=fc(0,j,v_p,ioe,k)+ nltsc(0,v_p,n,k)*P(j,n)
+                  fc(1,j,v_p,ioe,k)=fc(1,j,v_p,ioe,k)+ nltsc(1,v_p,n,k)*P(j,n)
+
+               end do
+            end do
+         end do
+         call symb(fc(0,1,1,0,k))
+      end do
+#endif
+
+c      print*,'in synthesis',fc(0,1,them1_p,1,1)
+
+
+      end 
+

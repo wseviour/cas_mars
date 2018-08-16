@@ -1,0 +1,75 @@
+
+
+------------------header files-------------------
+
+include/dims.h:
+
+nnlt=10, nanal=10  (formerly 7)
+nphy=8, nsyn=8     (formerly 7)
+nsp=4              (formerly 3)
+
+include/stptrs.h:
+
+defined INT, sig_p=4
+values of u_p, v_p, them1_p, vorm1_p increased by 1
+
+include/nltptrs.h:
+
+defined INT, l_p=8, m_p=9, n_p=10
+
+------------------model files-------------------
+
+additions to
+
+synthesis.F
+synthesis1.F
+analysis.F
+
+(see comments in code)
+
+initcoord.F:
+
+ - defined the gaussian weights for the tracer terms
+
+advance.F:
+
+ - added timestepping of tracer, "sigterm" and sc(...,sig_p,...) etc
+ - implemented a weaker hyperdiffusion than that used on vorticity (search "hds")
+
+bldnlt.F:
+
+ - added computation of terms L,M,N (see comments in routine and written notes)
+
+------------------initial conditions-------------------
+
+defined initial tracer field in the initial condition directory genini/zz:
+
+initvorth.F: simple tophat profile across equator
+
+initscg.F: search for "sig" will show all additions
+
+------------------diagnostics-------------------
+
+output of tracer field treated similarly to potential vorticity (written to s.00000 etc)
+
+fld.F:
+fld_bld.F: search "phy_s" will find all changes
+
+------------------run script-------------------
+
+run/rbvac
+
+ - now set up to integrate 100 days
+ - height relaxation to a NH winter state
+ - topographic forcing ramped up over 10 days to 0.1H
+ - (you will need to modify output directories etc; possibly also the Makefiles)
+
+------------------plotting-------------------
+
+see idl/pxy.pro for plotting PV and tracer fields for case run by rbvac
+
+ - produces files s00100_T170.png etc
+
+
+
+

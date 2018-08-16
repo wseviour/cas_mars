@@ -1,0 +1,17 @@
+pro getdataxyres,nlon,job,field,it,u
+
+nlat=nlon/2
+
+dummy=fltarr(long(nlon)*nlat)
+u=fltarr(nlon,nlat)
+
+openr,1,'../jobs/'+job+'/'+job+'.'+field+'.'+string(it,format='(i4.4)'),/f77_unformatted
+
+readu,1,dummy
+u(*,*)=reform(dummy,nlon,nlat)
+
+close,1
+
+print,'got data: '+field
+
+end
