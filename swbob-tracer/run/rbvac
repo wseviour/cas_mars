@@ -20,7 +20,7 @@ endif
 set host=laptop
 
 
-set outdir='output'
+set outdir='model_output'
 
 if ( ($arch == Linux) && ($host == modon) ) then
   set make = gmake
@@ -35,7 +35,7 @@ if ( ($arch == Linux) && ($host == laptop) ) then
   set nnodes = 1                # number of nodes    2 4 8 16 32 ...
   set nppn   = 1                # number of processors per node
   set mpi    = 0
-  set subdir=${HOME}'/Research/swbob-tracer/'$outdir
+  set subdir=${HOME}'/Research/cas_mars/'$outdir
 endif
 
 #--------------------------------------------------------------
@@ -115,7 +115,7 @@ if ( $icn == ann ) then
     set dlat=-1.0    # -ve to indicate read theq from ic.dat
     set ueq0=0.0
     #set kt=0.0
-    set kt=4.0 #- wjms
+    set kt=5.0 #- wjms
 
 # momentum relaxation:
 #    set dlatm=-10.0    # -ve to indicate read ueq from ic.dat
@@ -227,20 +227,20 @@ set ampm=$usb
 
 if ( $sat == 1 ) then
 #    set tsat=400
-    set tsat=200.0 #trying to turn off topography- wjms
+    set tsat=400.0 #trying to turn off topography- wjms, 200 defualt
     set tfac=`echo "0.25*$tsat/1000" | bc -l`
     set ampt=`echo "$tfac*$hbar*$gravity" | bc -l`
     set mt=2
 #    set latt=0.0
     set latt=-90.0   # global topography - label GT
-#    set cstr=${cstr}sat${tsat}
+    set cstr=${cstr}sat${tsat}
 endif
 
 set jobname=${label}.c${cstr}.T${res}
 
 set tstd = 240    #  240 @ T85, 480 @ T170
 
-set ndays = 2000
+set ndays = 300
 
 # forcing and other compile options:
 set rterm=0
@@ -272,7 +272,7 @@ set restart = 0
 set plev = 1
 
 @ zonfreq = (  1 * $tstd )       #zonal output interval (in timesteps)
-@ fldfreq = ( $tstd / 2 )       #field output interval (in timesteps)
+@ fldfreq = ( $tstd / 4 )       #field output interval (in timesteps)
 
 # end of paramters to be set
 #--------------------------------------------------------------

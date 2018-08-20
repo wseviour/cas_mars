@@ -3,15 +3,15 @@ Script to make a netCDF file from BOB binary output
 '''
 
 import numpy as np
-import iris
 import glob
-import matplotlib.pyplot as plt
+# import matplotlib
+# matplotlib.use('qt5agg')
+# import matplotlib.pyplot as plt
+import xarray as xr
+# import matplotlib.path as mpath
 import cartopy.crs as ccrs
-import matplotlib.path as mpath
-import iris.plot as iplt
 
-
-def cube_from_BOB(files, res, var_name, new_format=False, time_step=1.,units=None):
+def ds_from_BOB(run_dir, vars, res, time_step=0.25,units=None):
     """ Returns a single cube containing output of `files', a
     list of BOB binary files
     """
@@ -27,87 +27,42 @@ def cube_from_BOB(files, res, var_name, new_format=False, time_step=1.,units=Non
              }
     try:
         nlon = nlons[res]
-        nlat = nlon/2
+        nlat = int(nlon/2)
     except KeyError:
-        print "resolution not found"
+        print("resolution not found")
 
-    if new_format:
-        a = [np.reshape(np.fromfile(f, dtype='float32')[1:-1], (nlat,nlon)) for f in files]
-    else:
-        a = [np.reshape(np.fromfile(f, dtype='float32'), (nlat,nlon)) for f in files]
-    arr = np.stack(a, axis=0)
-
-    lats = np.genfromtxt('../swbob/grids/GRID.T%s' % res, max_rows=nlat/2)
-    lats = np.rad2deg(np.append(lats[::-1,1],-lats[:,1]))
-
-    #lats = np.linspace(90,-90,nlat)
-    lon_spacing = 360./nlons[res]
+    tmp = np.rad2deg(np.genfromtxt(run_dir+'/GRID.T%s' % res, max_rows=nlat/2)[:,1])
+    lats = np.append(90-tmp,-90+np.flip(tmp,axis=0))
+    #lats = np.rad2deg(np.append(lats[::-1,1],-lats[:,1]))
+    lon_spacing = 360./float(nlons[res])
     lons = np.arange(0,360,lon_spacing)
-    time = np.arange(len(files))/time_step
+    ds = xr.Dataset()
 
-    lats_coord = iris.coords.DimCoord(lats, standard_name='latitude', units='degrees_N')
-    lons_coord = iris.coords.DimCoord(lons, standard_name='longitude', units='degrees_E')
-    time_coord = iris.coords.DimCoord(time, standard_name='time', units='days')
+    for var in vars:
+        print('* Reading %s' % var)
+        files = sorted(glob.glob(run_dir+'/'+var+'.?????'))[1:]
+        a = [np.reshape(np.fromfile(f, dtype='float32'), (nlat,nlon)) for f in files]
+        arr = np.stack(a, axis=0)
+        time = np.arange(len(files))*time_step
+        arr = xr.DataArray(arr,dims=('time','latitude','longitude'),coords=[time,lats,lons])
+        if units:
+            arr.attrs['units'] = units[var]
+        ds[var] = arr
 
-    cube = iris.cube.Cube(arr, standard_name=var_name)
-    cube.add_dim_coord(time_coord,0)
-    cube.add_dim_coord(lons_coord,2)
-    cube.add_dim_coord(lats_coord,1)
-    if units:
-        cube.units = units
-
-    return cube
+    return ds
 
 
 if __name__ == '__main__':
 
-    PATH = '/home/local/WIN/wseviou1/data/swvac/ann50-nu4-urlx.c00sat50.0.T42'
-    var = 'q'
-    var_name = 'potential_vorticity_of_atmosphere_layer'
-    res = 42
-    anim=False
-    plot=True
+    PATH = '../model_output/res_test57.-70.-nu4-urlx-kt4.0.c-0020sat200.0.T85'
+    res = 85
 
-    #days=[6,10,12,15,18,21,23,27,30]
-    days=[11,13,15,17,19,21,23,25,100]
+    ds = ds_from_BOB(PATH, ['q','u','v','h'], 85, time_step=0.5)
 
-    # No need to change below here
-    #-------------------------#
+    #ds.to_netcdf(PATH+'/'+PATH.split('/')[-1]+'.nc')
 
-    files = sorted(glob.glob(PATH+'/'+var+'.?????'))
-
-    cube = cube_from_BOB(files)
-
-    if anim:
-
-        for iday in range(0,200):
-
-            fig = plt.figure()
-            ax1 = fig.add_subplot(1,1,1, projection=ccrs.NorthPolarStereo())
-            theta = np.linspace(0, 2*np.pi, 100)
-            center, radius = [0.5, 0.5], 0.5
-            verts = np.vstack([np.sin(theta), np.cos(theta)]).T
-            circle = mpath.Path(verts * radius + center)
-            ax1.set_boundary(circle, transform=ax1.transAxes)
-            ax1.set_extent([-180, 180, 50, 90], ccrs.PlateCarree())
-            iplt.contourf(cube[iday,:,:],np.linspace(-0.01,0.02,30),cmap='Greys',extend='both')
-            plt.colorbar()
-            plt.savefig('/home/local/WIN/wseviou1/plots/day%03d.png' % iday)
-            plt.close()
-
-
-    if plot:
-
-        fig = plt.figure(figsize=(8,8))
-        for day in days:
-            print day
-            ax = fig.add_subplot(3,3,days.index(day)+1, projection=ccrs.NorthPolarStereo())
-            theta = np.linspace(0, 2*np.pi, 100)
-            center, radius = [0.5, 0.5], 0.5
-            verts = np.vstack([np.sin(theta), np.cos(theta)]).T
-            circle = mpath.Path(verts * radius + center)
-            ax.set_boundary(circle, transform=ax.transAxes)
-            ax.set_extent([-180, 180, 50, 90], ccrs.PlateCarree())
-            iplt.contourf(cube[day,:,:],np.linspace(-0.01,0.02,30),cmap='Greys',extend='both')
-
-        plt.tight_layout()
+    # ax = plt.axes(projection=ccrs.NorthPolarStereo())
+    # ax.set_extent([-180,180,45,90], ccrs.PlateCarree())
+    # ax.contourf(ds.coords['longitude'].data,ds.coords['latitude'].data, ds['q'].isel(time=300).data, 21, transform=ccrs.PlateCarree())
+    #
+    # plt.show()

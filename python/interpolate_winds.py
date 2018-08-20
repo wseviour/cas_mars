@@ -3,9 +3,8 @@ Script to interpolate winds and ouput text file for use in CAS script
 '''
 
 import numpy as np
-import iris
 import glob
-from read_BOB import cube_from_BOB
+from read_BOB import ds_from_BOB
 import csv
 import os
 
@@ -17,61 +16,38 @@ PATH = '../model_output/'
 ext = 'res_test57.-70.-nu4-urlx-kt4.0.c-0020sat200.0.T85/'
 res = 85
 
-os.system('mkdir ../cas/winds_'+ext)
+if not os.path.isdir(PATH+ext+'winds'):
+    os.system('mkdir '+PATH+ext+'winds')
 
-nlons = {2730 : 8192,
-         1365 : 4096,
-         682 : 2058,
-         341 : 1024,
-         170 : 512,
-         85 : 256,
-         42 : 128,
-         21 : 64
-         }
-try:
-    nlon = nlons[res]
-    nlat = nlon/2
-except KeyError:
-    print "resolution not found"
+ds = ds_from_BOB(PATH+ext, ['u','v'], 85, time_step=0.5)
+# Restrict to NH
+nlat = int(len(ds.coords['latitude'])/2)
+ds = ds.isel(latitude=slice(None,nlat))
 
-var = 'u'
-u_files = sorted(glob.glob(PATH+ext+'/'+var+'.?????'))
-u_cube = cube_from_BOB(u_files, res, 'eastward_wind')
-# restrict to NH
-u_cube = u_cube[:,:nlat/2,:]
-
-var = 'v'
-v_files = sorted(glob.glob(PATH+ext+'/'+var+'.?????'))
-v_cube = cube_from_BOB(v_files, res, 'northward_wind')
-# restrict to NH
-v_cube = v_cube[:,:nlat/2,:]
-
-#nlon=72
-#nlat = 46
-#remainder =2
-
+# Resolution for cas winds
 nlon = 144
 nlat = 92
-remainder = 4
+remainder = 4  # remainder after writing u 5 lon points at a time
 
-new_grid = [('longitude', np.arange(0,360,360./nlon)),
-            ('latitude',  np.arange(0, 90, 90./nlat)[::-1])]
-
-v_interp = v_cube.interpolate(new_grid, iris.analysis.Linear())
-u_interp = u_cube.interpolate(new_grid, iris.analysis.Linear())
-
-for iday in range(start_time,start_time+ndays):
-    with open('../cas/winds_'+ext+prefix_u+'%05d' % iday, 'wb') as csvfile:
-        writer = csv.writer(csvfile, delimiter=' ')
-        for ilat in range(nlat):
-            for iline in range(nlon/5):
-                writer.writerow(u_interp[iday,ilat,iline*5:5+iline*5].data)
-            writer.writerow(u_interp[iday,ilat,-remainder:].data)
+# Interpolate to new grid
+new_lon = np.arange(0,360,360./nlon)
+new_lat = np.arange(0, 90, 90./nlat)[::-1]
+ds_cas = ds.interp(latitude=new_lat,longitude=new_lon, kwargs={'fill_value':None})
 
 for iday in range(start_time,start_time+ndays):
-    with open('../cas/winds_'+prefix_v+'%05d' % iday, 'wb') as csvfile:
+    with open(PATH+ext+'winds/u'+'%05d' % iday, 'w') as csvfile:
+        print('Writing '+PATH+ext+'winds/u'+'%05d' % iday)
         writer = csv.writer(csvfile, delimiter=' ')
         for ilat in range(nlat):
-            for iline in range(nlon/5):
-                writer.writerow(v_interp[iday,ilat,iline*5:5+iline*5].data)
-            writer.writerow(v_interp[iday,ilat,-remainder:].data)
+            for iline in range(nlon//5):
+                writer.writerow(ds_cas['u'][iday,ilat,iline*5:5+iline*5].data)
+            writer.writerow(ds_cas['u'][iday,ilat,-remainder:].data)
+
+for iday in range(start_time,start_time+ndays):
+    with open(PATH+ext+'winds/v'+'%05d' % iday, 'w') as csvfile:
+        print('Writing '+PATH+ext+'winds/v'+'%05d' % iday)
+        writer = csv.writer(csvfile, delimiter=' ')
+        for ilat in range(nlat):
+            for iline in range(nlon//5):
+                writer.writerow(ds_cas['v'][iday,ilat,iline*5:5+iline*5].data)
+            writer.writerow(ds_cas['v'][iday,ilat,-remainder:].data)

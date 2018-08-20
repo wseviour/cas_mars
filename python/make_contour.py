@@ -3,9 +3,10 @@ Script for producing contour file for cas
 '''
 
 import numpy as np
-import iris
 import glob
-from read_BOB import cube_from_BOB
+from read_BOB import ds_from_BOB
+import matplotlib
+matplotlib.use('qt5agg')
 import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
 import cartopy.util
@@ -28,7 +29,7 @@ def haversine(lon1, lat1, lon2, lat2):
     dlat = lat2 - lat1
     a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
     c = 2 * asin(sqrt(a))
-    r = 6371 # Radius of earth in kilometers. Use 3956 for miles
+    r = 3389 # Radius of mars in kilometers.
     return c * r
 
 def calc_con_len(con):
@@ -39,8 +40,15 @@ def calc_con_len(con):
 
 
 # day of simulation for contour
-day = 200
 ndays = 50
+start_time = 200
+PATH = '../model_output/'
+ext = 'res_test57.-70.-nu4-urlx-kt4.0.c-0020sat200.0.T85/'
+res = 85
+
+ds = ds_from_BOB(PATH+ext, ['q'], 85, time_step=0.5)
+
+day = 200
 factor=1
 pv_cons = [0.5,0.6,0.7,0.8,0.9,1.0,1.1,1.2,1.3,1.4,1.35,1.3,1.2,1.1]
 PATH = '../model_output/'

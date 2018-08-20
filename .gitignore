@@ -1,8 +1,5 @@
 model_output/*
 !model_output/.gitkeep
-cas/cas_output/*
-!cas/cas_output/.gitkeep
 MarsWRF_data/*
 !MarsWRF_data/.gitkeep
-cas/cas_output_MarsWRF/*
-!cas/cas_output_MarsWRF/.gitkeep
+cas/winds/*
