@@ -115,7 +115,7 @@ if ( $icn == ann ) then
     set dlat=-1.0    # -ve to indicate read theq from ic.dat
     set ueq0=0.0
     #set kt=0.0
-    set kt=5.0 #- wjms
+    set kt=0.4 #- wjms
 
 # momentum relaxation:
 #    set dlatm=-10.0    # -ve to indicate read ueq from ic.dat
@@ -227,13 +227,13 @@ set ampm=$usb
 
 if ( $sat == 1 ) then
 #    set tsat=400
-    set tsat=400.0 #trying to turn off topography- wjms, 200 defualt
+    set tsat=200.0 #trying to turn off topography- wjms, 200 defualt
     set tfac=`echo "0.25*$tsat/1000" | bc -l`
     set ampt=`echo "$tfac*$hbar*$gravity" | bc -l`
     set mt=2
 #    set latt=0.0
     set latt=-90.0   # global topography - label GT
-    set cstr=${cstr}sat${tsat}
+#    set cstr=${cstr}sat${tsat}
 endif
 
 set jobname=${label}.c${cstr}.T${res}

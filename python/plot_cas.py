@@ -11,19 +11,40 @@ import save_restore
 
 if __name__ == '__main__':
 
-    calc_from_scratch = False
-    plot_len_rates = False
-    plot_contours = True
+    calc_from_scratch_rlax = True
+    calc_from_scratch_topo = False
+    plot_len_rates_rlax = False
+    plot_contours = False
 
-    rlax_vals = ['5.0','4.0','1.0','0.0']
+
+    rlax_vals = ['5.0','4.0','1.0','0.8','0.4','0.0']
+    topo_vals = ['400','100']
     #rlax_vals=['2.0']
 
-    ndays = 10 # number days for CAS calculation
+    ndays = 20 # number days for CAS calculation
     start_time = 800 # starting time step of CAS
     time_step= 0.25 # time step in SWM
     res = 85 # resolution of SWM
 
-    if calc_from_scratch:
+    if calc_from_scratch_rlax:
+
+        len_rates = {}
+        cons = {}
+        for rlax in rlax_vals:
+
+            PATH = '../model_output/'
+            ext = 'ann57.-70.-nu4-urlx-kt%s-sinlat.c-0020.T85/' % rlax
+            Cas_rlax = Cas(PATH+ext, start_time, ndays, time_step)
+            Cas_rlax.interpolate_winds()
+            #Cas_rlax.make_contours(lats=np.arange(55,89,1.5))
+            #Cas_rlax.run_cas()
+            #len_rates[rlax] = Cas_rlax.len_rate_eqlat()
+            #icons, ilens = Cas_rlax.read_cons_lens()
+            #cons[rlax] = icons
+        save_restore.save('len_rates_rlax.pypic', len_rates=len_rates)
+        save_restore.save('cons_rlax.pypic', cons=cons)
+
+    elif calc_from_scratch_topo:
 
         len_rates = {}
         cons = {}
@@ -38,11 +59,11 @@ if __name__ == '__main__':
             #len_rates[rlax] = Cas_rlax.len_rate_eqlat()
             icons, ilens = Cas_rlax.read_cons_lens()
             cons[rlax] = icons
-        save_restore.save('len_rates.pypic', len_rates=len_rates)
-        save_restore.save('cons.pypic', cons=cons)
+        save_restore.save('len_rates_rlax.pypic', len_rates=len_rates)
+        save_restore.save('cons_rlax.pypic', cons=cons)
 
-    elif plot_len_rates:
-        len_rates = save_restore.restore('len_rates.pypic')['len_rates']
+    elif plot_len_rates_rlax:
+        len_rates = save_restore.restore('len_rates_rlax.pypic')['len_rates']
 
         fig = plt.figure(figsize=(7,9))
         for rlax in rlax_vals:
@@ -56,7 +77,7 @@ if __name__ == '__main__':
                 tstd = 1/float(rlax)
             except ZeroDivisionError:
                 tstd = 0
-            ax1 = fig.add_subplot(2,2,rlax_vals.index(rlax)+1)
+            ax1 = fig.add_subplot(3,2,rlax_vals.index(rlax)+1)
             ax1.set_title("$t_r = %.2f$ sols" % tstd if tstd != 0 else r"$t_r \rightarrow \infty$")
             ax1.plot(len_rates[rlax][:,0],len_rates[rlax][:,1],color='b',marker='.')
             ax1.set_ylabel('lengthening rate (1/sol)')
@@ -79,14 +100,14 @@ if __name__ == '__main__':
 
         fig = plt.figure(figsize=(7,9))
         for rlax in rlax_vals:
-            cons = save_restore.restore('cons.pypic')['cons'][rlax]
+            cons = save_restore.restore('cons_rlax.pypic')['cons'][rlax]
             try:
                 tstd = 1/float(rlax)
             except ZeroDivisionError:
                 tstd = 0
             colors = plt.cm.rainbow(np.linspace(0,1,len(cons.keys())))
 
-            ax = fig.add_subplot(2,2,rlax_vals.index(rlax)+1, projection=ccrs.NorthPolarStereo())
+            ax = fig.add_subplot(3,2,rlax_vals.index(rlax)+1, projection=ccrs.NorthPolarStereo())
             theta = np.linspace(0, 2*np.pi, 200)
             center, radius = [0.5, 0.5], 0.5
             verts = np.vstack([np.sin(theta), np.cos(theta)]).T

@@ -54,12 +54,13 @@ def ds_from_BOB(run_dir, vars, res, time_step=0.25,units=None):
 
 if __name__ == '__main__':
 
-    PATH = '../model_output/res_test57.-70.-nu4-urlx-kt4.0.c-0020sat200.0.T85'
-    res = 85
+    for rlax in ['5.0','4.0','1.0','0.8','0.4','0.0']:
+        PATH = '../model_output/ann57.-70.-nu4-urlx-kt%s-sinlat.c-0020.T85/' % rlax
+        res = 85
 
-    ds = ds_from_BOB(PATH, ['q','u','v','h'], 85, time_step=0.5)
-
-    #ds.to_netcdf(PATH+'/'+PATH.split('/')[-1]+'.nc')
+        ds = ds_from_BOB(PATH, ['q','s','u','v','h'], 85, time_step=0.25)
+        print(PATH+PATH.split('/')[-2]+'.nc')
+        ds.to_netcdf(PATH+PATH.split('/')[-2]+'.nc')
 
     # ax = plt.axes(projection=ccrs.NorthPolarStereo())
     # ax.set_extent([-180,180,45,90], ccrs.PlateCarree())
