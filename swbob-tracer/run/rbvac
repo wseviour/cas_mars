@@ -20,7 +20,7 @@ endif
 set host=laptop
 
 
-set outdir='model_output'
+set outdir='swbob_model_output'
 
 if ( ($arch == Linux) && ($host == modon) ) then
   set make = gmake
@@ -35,7 +35,7 @@ if ( ($arch == Linux) && ($host == laptop) ) then
   set nnodes = 1                # number of nodes    2 4 8 16 32 ...
   set nppn   = 1                # number of processors per node
   set mpi    = 0
-  set subdir=${HOME}'/Research/cas_mars/'$outdir
+  set subdir='/export/anthropocene/array-01/kz18101/'$outdir
 endif
 
 #--------------------------------------------------------------
@@ -115,7 +115,7 @@ if ( $icn == ann ) then
     set dlat=-1.0    # -ve to indicate read theq from ic.dat
     set ueq0=0.0
     #set kt=0.0
-    set kt=0.4 #- wjms
+    set kt=0.3 #- wjms
 
 # momentum relaxation:
 #    set dlatm=-10.0    # -ve to indicate read ueq from ic.dat
