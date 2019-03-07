@@ -3,3 +3,5 @@ model_output/*
 MarsWRF_data/*
 !MarsWRF_data/.gitkeep
 cas/winds/*
+swbob-tracer/build_bob/*
+swbob-tracer/build_icn/*

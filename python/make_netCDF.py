@@ -2,22 +2,21 @@
 Script to make a netCDF file from BOB output
 '''
 
-from read_BOB import cube_from_BOB
+from read_BOB import ds_from_BOB
 import glob
 import numpy as np
 import matplotlib.pyplot as plt
-import iris
+import sys
 
-PATH = '../model_output/'
-ext = 'res_test57.-70.-nu4-urlx-kt4.0.c-0020sat200.0.T85'
-var = ['q','u','v']
-var_name = ['potential_vorticity_of_atmosphere_layer','eastward_wind','northward_wind']
-units = [None,'m s-1','m s-1']
-res = 85
-cubes = iris.cube.CubeList()
-for i in range(len(var)):
-    files = sorted(glob.glob(PATH+ext+'/'+var[i]+'.?????'))
-    cube = cube_from_BOB(files, res, var_name[i],time_step=2.,units=units[i])
-    cubes.append(cube)
+if sys.argv:
+    print(sys.argv[1])
+    ext = sys.argv[1]
+else:
+    ext = 'ann57.-70.-nu4-urlx-kt2.0-sinlat.c-0020.T85'
 
-iris.save(cubes, PATH+ext+'.nc')
+PATH = '../model_output/raw/'
+
+ds = ds_from_BOB(PATH+ext, ['q','s','u','v','h'], 85, time_step=0.25) 
+
+ds.to_netcdf(PATH.split('raw')[0]+'netcdf/'+ext+'.nc')
+

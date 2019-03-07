@@ -20,7 +20,7 @@ endif
 set host=laptop
 
 
-set outdir='swbob_model_output'
+set outdir='swbob_model_output/raw'
 
 if ( ($arch == Linux) && ($host == modon) ) then
   set make = gmake
@@ -240,7 +240,7 @@ set jobname=${label}.c${cstr}.T${res}
 
 set tstd = 240    #  240 @ T85, 480 @ T170
 
-set ndays = 300
+set ndays = 10
 
 # forcing and other compile options:
 set rterm=0
@@ -466,7 +466,7 @@ cd $rundir
 
 echo "running bobx..."
 
-./bobx < ${inputb} >> bobx.out &
+./bobx < ${inputb} >> bobx.out
 
 cp ${root}/run/rbvac ${rundir}/rbvac
 
@@ -475,5 +475,9 @@ cp ${root}/run/rbvac ${rundir}/rbvac
 #endif
 
 #rm -rf ${root}/build_bob
+
+cd $root
+echo "converting to netCDF..."
+~/.conda/envs/cas_mars/bin/python ../python/make_netCDF.py $jobname
 
 exit (0)
