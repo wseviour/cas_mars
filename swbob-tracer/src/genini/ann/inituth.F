@@ -14,9 +14,9 @@ cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
       external  navu
 
       REAL_TYPE uini(plat), vorini(plat), thini(plat), sigini(plat)
-
-      REAL_TYPE sinlat(plat), rlat(plat), da(plat)
-      REAL_TYPE snlat
+      REAL_TYPE sigini0(plat)
+      REAL_TYPE sinlat(plat), cosinelat(plat), rlat(plat), da(plat)
+      REAL_TYPE snlat, cslat
       REAL_TYPE qq(plat), qqn(plat), zz(plat), zz0(plat), ff(plat), s1(plat), s2(plat)
       REAL_TYPE uu(plat), hh(plat), dhdmu(plat)
       REAL_TYPE qq0(plat)
@@ -24,6 +24,8 @@ cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
       REAL_TYPE lat0,lat1,lat11,lat2,lat21,dq0,dq1,dq2,q0,q1,q2,dtor,rlat0,rlat1,rlat11,rlat2,rlat21
 
+      REAL_TYPE tracer_min, tracer_max
+      
       REAL_TYPE ctop,cbot,coff,hbar,havg
       REAL_TYPE phibari,twom,twoma
       REAL_TYPE alpha,tol,error
@@ -45,6 +47,8 @@ cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
          rlat(plat+1-j)=-rlat(j)
          sinlat(j)=DSIN(Pi/2-colatitude(j))
          sinlat(plat+1-j)=-sinlat(j)
+         cosinelat(j)=DCOS(Pi/2-colatitude(j))
+         cosinelat(plat+1-j)=cosinelat(j)
          da(j)=gausswt(j)
          da(plat+1-j)=da(j)
       end do
@@ -52,10 +56,16 @@ cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 c     rks - tracer=1 between 30S and 30N, tracer=0 elsewhere:
       do j=1,plat
          snlat=sinlat(j)
+         cslat=cosinelat(j)
 c     wjms - changing to a sin(lat) initial tracer distribution
-c         sigini(j) = 0.d0
-c         if (abs(snlat).le.0.5d0) sigini(j) = 1.d0
-         sigini(j) = snlat
+         sigini(j) = 0.d0
+c     if (abs(snlat).le.0.5d0) sigini(j) = 1.d0
+         tracer_min = 40.d0*dtor
+         tracer_max = 55.d0*dtor
+      if ((rlat(j).ge.tracer_min) .and. (rlat(j).le.tracer_max)) sigini(j) = 1.d0
+c     sigini(j) = snlat
+c     wjms - trying a smoother distribution
+c         sigini(j) = cslat**4.d0
       enddo
 
 c     test da:
@@ -131,6 +141,23 @@ c     apply a weak smoothing to eliminate Gibbs fringes in subsequent evolution
       endif
 #endif
 
+#if 1
+c     Smoothing for tracer - wjms
+c     apply a weak smoothing to eliminate Gibbs fringes in subsequent evolution
+      hw=2
+      if(hw.ge.1) then
+      iw=2*hw+1
+      do j=1,plat
+         sigini0(j)=sigini(j)
+      enddo
+      do j=1+hw,plat-hw
+         do i=1,hw
+            sigini(j)=sigini(j)+sigini0(j-i)+sigini0(j+i)
+         enddo
+         sigini(j)=sigini(j)/dble(iw)
+      enddo
+      endif
+#endif
 
 #if 1
 c     alternative smoothing (convolve with gaussian kernel):

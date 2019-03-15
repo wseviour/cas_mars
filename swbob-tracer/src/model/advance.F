@@ -54,6 +54,8 @@ c     rks - optionally different hyperdiffusion on tracer:
       common /toporamp/ ramp,rmpc
 #endif
       REAL_TYPE phtc,phts,phhc,phhs,targ
+c     wjms
+      REAL_TYPE tracer_start
 
 c----------------------------------------
 c     Executable Statements
@@ -251,7 +253,14 @@ c     vorticity forcing (stochastic):
             vorterm(0)= vorterm(0) + fvorsc(0,n,k)*ramp
             vorterm(1)= vorterm(1) + fvorsc(1,n,k)*ramp
 #endif
-
+c$$$#if 1
+c$$$c     only start tracer field after certain time
+c$$$            tracer_start=100.d0
+c$$$            if (time_current.lt.tracer_start) then
+c$$$               sigterm(0) = 0.d0
+c$$$               sigterm(1) = 0.d0
+c$$$            endif
+c$$$#endif 
             scp1(0,vor_p,n)=scm1(0,vor_p,n,k)+dt2*hducor*vorterm(0)
             scp1(1,vor_p,n)=scm1(1,vor_p,n,k)+dt2*hducor*vorterm(1)
 
@@ -266,9 +275,16 @@ c     vorticity forcing (stochastic):
      $           +dt2*hdtcor*(thterm(1) - PhiBar*(hducor*dt*divterm(1) + scm1(1,div_p,n,k) )))
 
 c     rks - tracer terms:
-            scp1(0,sig_p,n)=scm1(0,sig_p,n,k)+dt2*hdscor*sigterm(0)
-            scp1(1,sig_p,n)=scm1(1,sig_p,n,k)+dt2*hdscor*sigterm(1)
-
+            tracer_start = 100.d0*SecPerDay
+            if (time_current.gt.tracer_start) then
+               scp1(0,sig_p,n)=scm1(0,sig_p,n,k)+dt2*hdscor*sigterm(0)
+               scp1(1,sig_p,n)=scm1(1,sig_p,n,k)+dt2*hdscor*sigterm(1)
+            else
+               scp1(0,sig_p,n)=scm1(0,sig_p,n,k)
+               scp1(1,sig_p,n)=scm1(1,sig_p,n,k)
+            endif
+               
+               
          end do ! Loop in n
 
 
@@ -322,7 +338,7 @@ c     odd zonal wavenumbers=0:
       endif
 #endif
 
-
+      
       end
 
 

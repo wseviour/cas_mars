@@ -5,3 +5,4 @@ MarsWRF_data/*
 cas/winds/*
 swbob-tracer/build_bob/*
 swbob-tracer/build_icn/*
+plots/.*
