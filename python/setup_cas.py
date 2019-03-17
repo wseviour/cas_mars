@@ -14,17 +14,19 @@ from itertools import islice
 from pyproj import Proj
 from shapely.geometry import shape
 from scipy.optimize import curve_fit
-
+import xarray as xr
 
 class Cas:
     """
     Perform CAS calculations
     """
-    def __init__(self, run_dir, start_time, ndays, time_step):
+    def __init__(self, run_dir, start_time, ndays, time_step, model_type='SWM', level=None):
         self.run_dir = run_dir
         self.start_time = start_time
         self.ndays = ndays
         self.time_step = time_step
+        self.model_type = model_type
+        self.level = level
 
     def exp_func(self, x, a, b):
         """
@@ -87,53 +89,122 @@ class Cas:
         """
         nsteps = int(self.ndays/self.time_step)
 
-        # First check if wind files already exist
-        file_list = [self.run_dir+'winds/u%.5d' % istep for istep in range(self.start_time,self.start_time+nsteps)]
-        file_test = [os.path.isfile(f) for f in file_list]
-        if all(file_test):
-            print("winds already exist, no need to interpolate them")
-            return
-        else:
-            print("not all wind file available, interpolating...")
-
-            ds = ds_from_BOB(self.run_dir, ['u','v'], 85, time_step=self.time_step)
-
-            if os.path.isdir(self.run_dir+'winds'):
-                os.system('rm -f '+self.run_dir+'winds/*')
+        # Resolution for cas winds
+        nlon = 144
+        nlat = 92
+        remainder = 4  # remainder after writing u 5 lon points at a time
+        
+        if self.model_type == 'SWM':
+            # First check if wind files already exist
+            file_list = [self.run_dir+'winds/u%.5d' % istep for istep in range(self.start_time,self.start_time+nsteps)]
+            file_test = [os.path.isfile(f) for f in file_list]
+            if all(file_test):
+                print("winds already exist, no need to interpolate them")
+                return
             else:
-                os.system('mkdir '+self.run_dir+'winds')
+                print("not all wind file available, interpolating...")
 
-            # Restrict to NH
-            nlat = int(len(ds.coords['latitude'])/2)
-            ds = ds.isel(latitude=slice(None,nlat))
+                ds = ds_from_BOB(self.run_dir, ['u','v'], 85, time_step=self.time_step)
 
-            # Resolution for cas winds
-            nlon = 144
-            nlat = 92
-            remainder = 4  # remainder after writing u 5 lon points at a time
+                if os.path.isdir(self.run_dir+'winds'):
+                    os.system('rm -f '+self.run_dir+'winds/*')
+                else:
+                    os.system('mkdir '+self.run_dir+'winds')
 
-            # Interpolate to new grid
-            new_lon = np.arange(0,360,360./nlon)
-            new_lat = np.arange(0, 90, 90./nlat)[::-1]
-            ds_cas = ds.interp(latitude=new_lat,longitude=new_lon, kwargs={'fill_value':None})
+                # Restrict to NH
+                #nlat = int(len(ds.coords['latitude'])/2)
+                #ds = ds.isel(latitude=slice(None,nlat))
+                ds = ds.sel(latitude=slice(90,0))
 
-            for istep in range(self.start_time,self.start_time+nsteps):
-                with open(self.run_dir+'winds/u'+'%05d' % istep, 'w') as csvfile:
-                    print('Writing '+self.run_dir+'winds/u'+'%05d' % istep)
-                    writer = csv.writer(csvfile, delimiter=' ')
-                    for ilat in range(nlat):
-                        for iline in range(nlon//5):
-                            writer.writerow(ds_cas['u'][istep,ilat,iline*5:5+iline*5].data)
-                        writer.writerow(ds_cas['u'][istep,ilat,-remainder:].data)
+                # Interpolate to new grid
+                new_lon = np.arange(0,360,360./nlon)
+                new_lat = np.arange(0, 90, 90./nlat)[::-1]
+                ds_cas = ds.interp(latitude=new_lat,longitude=new_lon, kwargs={'fill_value':None})
 
-            for istep in range(self.start_time,self.start_time+nsteps):
-                with open(self.run_dir+'winds/v'+'%05d' % istep, 'w') as csvfile:
-                    print('Writing '+self.run_dir+'winds/v'+'%05d' % istep)
-                    writer = csv.writer(csvfile, delimiter=' ')
-                    for ilat in range(nlat):
-                        for iline in range(nlon//5):
-                            writer.writerow(ds_cas['v'][istep,ilat,iline*5:5+iline*5].data)
-                        writer.writerow(ds_cas['v'][istep,ilat,-remainder:].data)
+                for istep in range(self.start_time,self.start_time+nsteps):
+                    with open(self.run_dir+'winds/u'+'%05d' % istep, 'w') as csvfile:
+                        print('Writing '+self.run_dir+'winds/u'+'%05d' % istep)
+                        writer = csv.writer(csvfile, delimiter=' ')
+                        for ilat in range(nlat):
+                            for iline in range(nlon//5):
+                                writer.writerow(ds_cas['u'][istep,ilat,iline*5:5+iline*5].data)
+                            writer.writerow(ds_cas['u'][istep,ilat,-remainder:].data)
+
+                for istep in range(self.start_time,self.start_time+nsteps):
+                    with open(self.run_dir+'winds/v'+'%05d' % istep, 'w') as csvfile:
+                        print('Writing '+self.run_dir+'winds/v'+'%05d' % istep)
+                        writer = csv.writer(csvfile, delimiter=' ')
+                        for ilat in range(nlat):
+                            for iline in range(nlon//5):
+                                writer.writerow(ds_cas['v'][istep,ilat,iline*5:5+iline*5].data)
+                            writer.writerow(ds_cas['v'][istep,ilat,-remainder:].data)
+                
+        elif self.model_type == 'MarsWRF':
+            # First check if wind files already exist
+            file_list = [self.run_dir+'winds_Z%.2d/u%.5d' % (self.level,istep) for istep in range(self.start_time,self.start_time+nsteps)]
+            file_test = [os.path.isfile(f) for f in file_list]
+            if all(file_test):
+                print("winds already exist, no need to interpolate them")
+                return
+            else:
+                print("not all wind file available, interpolating...")
+
+                if os.path.isdir(self.run_dir+'winds_Z%.2d' % self.level):
+                    os.system('rm -f '+self.run_dir+'winds_Z%.2d/*' % self.level)
+                else:
+                    os.system('mkdir '+self.run_dir+'winds_Z%.2d/' % self.level)
+
+
+                ds_raw = xr.open_mfdataset(self.run_dir+'*.nc', concat_dim='Time')
+                #ds_raw = xr.open_mfdataset('../MarsWRF_data/*.nc', concat_dim='Time')
+
+                ds_raw = ds_raw.where(ds_raw.L_S < 300, drop=True) # Drop missing values in MarsWRF files
+
+                lat = ds_raw.LAT[0,:,0]
+                lon = ds_raw.LON[0,0,:] % 360 # make sure in 0-360 format, not -180-180
+                lon = np.append(lon[90:],lon[:90])
+                theta = ds_raw.THETA[0,:]
+                l_s = ds_raw.L_S
+
+                U = ds_raw.U.data
+                V = ds_raw.V.data
+                EPV = ds_raw.EPV.data
+                U = np.append(U[:,:,:,90:],U[:,:,:,:90], axis=3)
+                V = np.append(U[:,:,:,90:],U[:,:,:,:90], axis=3)
+                EPV = np.append(U[:,:,:,90:],U[:,:,:,:90], axis=3)            
+
+                ds = xr.Dataset({'u':(['l_s','theta','latitude','longitude'], U),
+                                 'v':(['l_s','theta','latitude','longitude'], V),
+                                 'q':(['l_s','theta','latitude','longitude'], EPV)},
+                                 coords = {'l_s':('l_s',l_s),
+                                           'theta':('theta',theta),
+                                           'latitude':('latitude',lat),
+                                           'longitude':('longitude',lon)})
+
+                ds = ds.isel(theta=self.level) # Select given level
+                #ds = ds.isel(theta=15) # Select given level
+                ds = ds.sel(latitude=slice(0,90))
+                new_lon = np.arange(0,360,360./nlon)
+                new_lat = np.arange(0, 90, 90./nlat)[::-1]
+                ds_cas = ds.interp(latitude=new_lat,longitude=new_lon, kwargs={'fill_value':None})
+
+                for istep in range(self.start_time,self.start_time+nsteps):
+                    with open(self.run_dir+'winds_Z%.2d/u%05d' % (self.level,istep), 'w') as csvfile:
+                        print('Writing '+self.run_dir+'winds_Z%.2d/u%05d' % (self.level,istep))
+                        writer = csv.writer(csvfile, delimiter=' ')
+                        for ilat in range(nlat):
+                            for iline in range(nlon//5):
+                                writer.writerow(ds_cas['u'][istep,ilat,iline*5:5+iline*5].data)
+                            writer.writerow(ds_cas['u'][istep,ilat,-remainder:].data)
+
+                for istep in range(self.start_time,self.start_time+nsteps):
+                    with open(self.run_dir+'winds_Z%.2d/v%05d' % (self.level,istep), 'w') as csvfile:
+                        print('Writing '+self.run_dir+'winds_Z%.2d/v%05d' % (self.level,istep))
+                        writer = csv.writer(csvfile, delimiter=' ')
+                        for ilat in range(nlat):
+                            for iline in range(nlon//5):
+                                writer.writerow(ds_cas['v'][istep,ilat,iline*5:5+iline*5].data)
+                            writer.writerow(ds_cas['v'][istep,ilat,-remainder:].data)
 
     def make_contours(self, con_var='q',lats=np.arange(50,86,2)):
         """
@@ -147,13 +218,38 @@ class Cas:
         else:
             os.system('mkdir '+self.run_dir+'contours')
 
-        ds = ds_from_BOB(self.run_dir, [con_var], 85, time_step=self.time_step)
+        if self.model_type == 'SWM':
+            ds = ds_from_BOB(self.run_dir, [con_var], 85, time_step=self.time_step)
+        elif self.model_type == 'MarsWRF':
+            ds_raw = xr.open_mfdataset(self.run_dir+'*.nc', concat_dim='Time')
+            ds_raw = ds_raw.where(ds_raw.L_S < 300, drop=True) # Drop missing values in MarsWRF files
+            lat = ds_raw.LAT[0,:,0]
+            lon = ds_raw.LON[0,0,:] % 360 # make sure in 0-360 format, not -180-180
+            lon = np.append(lon[90:],lon[:90])
+            theta = ds_raw.THETA[0,:]
+            l_s = ds_raw.L_S
+            U = ds_raw.U.data
+            V = ds_raw.V.data
+            EPV = ds_raw.EPV.data
+            U = np.append(U[:,:,:,90:],U[:,:,:,:90], axis=3)
+            V = np.append(U[:,:,:,90:],U[:,:,:,:90], axis=3)
+            EPV = np.append(U[:,:,:,90:],U[:,:,:,:90], axis=3)            
 
+            ds = xr.Dataset({'u':(['l_s','theta','latitude','longitude'], U),
+                             'v':(['l_s','theta','latitude','longitude'], V),
+                             'q':(['l_s','theta','latitude','longitude'], EPV)},
+                             coords = {'l_s':('l_s',l_s),
+                                       'theta':('theta',theta),
+                                       'latitude':('latitude',lat),
+                                       'longitude':('longitude',lon)})
+            ds = ds.sel(latitude=slice(0,90))
+            ds = ds.isel(theta=self.level) # Select given level
+        
         ds_zm = ds[con_var].mean(dim='longitude')[self.start_time,:]
-
         lats = np.arange(50,86,2) # approx lats for PV contours
 
         cons = ds_zm.interp(latitude=lats).data
+
         #cons = [0.5,0.6,0.7,0.8,0.9,1.0,1.1,1.2,1.3,1.4,1.35,1.3,1.2,1.1]
 
         lats = ds.coords['latitude'].data
@@ -161,12 +257,11 @@ class Cas:
         count=0
 
         for icon in cons:
-
+            print('contour: '+str(icon))
             inner = False
-            if count > 0:
-                if cons[count-1] > icon:
-                    inner = True
-
+            if (count > 0) and (cons[count-1] > icon):
+                inner = True
+                print('inner')
             fig = plt.figure()
             ax = fig.add_subplot(1,1,1, projection=ccrs.NorthPolarStereo())
             theta = np.linspace(0, 2*np.pi, 100)
@@ -176,21 +271,39 @@ class Cas:
             ax.set_boundary(circle, transform=ax.transAxes)
             ax.set_extent([-180, 180,20, 90], ccrs.PlateCarree())
             ax.gridlines()
-            con1 = ax.contourf(lons, lats, ds[con_var][self.start_time,:,:].data,np.linspace(0,1.6,11),cmap='viridis', transform=ccrs.PlateCarree())
-            con = ax.contour(lons, lats, ds[con_var][self.start_time,:,:].data,[icon],colors='k', transform=ccrs.PlateCarree())
+            cyclic_data, cyclic_lons = cartopy.util.add_cyclic_point(ds[con_var][self.start_time,:].data, coord = lons) ##
+            con1 = ax.contourf(cyclic_lons, lats, cyclic_data,cmap='viridis', transform=ccrs.PlateCarree())
+            con = ax.contour(cyclic_lons, lats, cyclic_data,[icon],colors='k', transform=ccrs.PlateCarree())
             if len(con.allsegs[0]) == 1:
                 a = con.allsegs[0][0]
             else:
-                lens = np.zeros(len(con.allsegs[0]))
-                for iicon in range(len(con.allsegs[0])):
-                    lens[iicon] = self.calc_con_len(con.allsegs[0][iicon])
-                if inner:
-                    # 2nd longest contour
-                    a = con.allsegs[0][np.where(lens == np.sort(lens)[-2])[0][0]]
+                print('checking for merged contours')
+                # First check if any contours are adjacent
+                all_cons = np.vstack(con.allsegs[0])
+                splits=[]
+                for i in range(all_cons.shape[0]-1):
+                    diff = self.haversine(all_cons[i,1],all_cons[i,0],all_cons[i+1,1],all_cons[i+1,0])
+                    if diff > 500:
+                        splits.append(i)
+                
+                print(splits)
+                merged_cons = np.split(all_cons, splits)
+                if len(merged_cons) == 1:
+                    a = merged_cons[0]
                 else:
-                    a = con.allsegs[0][np.argmax(lens)]
+                    lens = np.zeros(len(merged_cons))
+                    for iicon in range(len(merged_cons)):
+                        lens[iicon] = self.calc_con_len(merged_cons[iicon])
+                    if inner:
+                        # 2nd longest contour
+                        a = merged_cons[np.where(lens == np.sort(lens)[-2])[0][0]]
+                    else:
+                        a = merged_cons[np.argmax(lens)]
+                a = a[1:,:]
+            a = a[a[:,0]<360]
             plt.plot(a[:,0],a[:,1], transform=ccrs.Geodetic(), color='red')
             plt.tight_layout()
+            plt.show()
             plt.close()
 
             if a[:,0][0] > a[:,1][1]:
@@ -349,12 +462,16 @@ if __name__ == '__main__':
     time_step= 0.5 # time step in SWM
     res = 85 # resolution of SWM
 
-    Cas = Cas(PATH+ext, start_time, ndays, time_step)
-    Cas.interpolate_winds()
-    Cas.make_contours(con_var='q')
-    Cas.run_cas()
-    len_rates = Cas.len_rate_eqlat()
+    # Cas = Cas(PATH+ext, start_time, ndays, time_step)
+    # Cas.interpolate_winds()
+    # Cas.make_contours(con_var='q')
+    # Cas.run_cas()
+    # len_rates = Cas.len_rate_eqlat()
 
+    Cas = Cas('../MarsWRF_data/',100,10,0.5,model_type='MarsWRF',level=10)
+    #Cas.interpolate_winds()
+    Cas.make_contours(con_var='q')
+    
     # interpolate_winds(PATH+ext, start_time, ndays, time_step)
     # make_contours(PATH+ext, start_time, ndays, con_var='q')
     # run_cas(PATH+ext,start_time)
