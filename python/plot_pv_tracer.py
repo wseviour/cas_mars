@@ -9,9 +9,9 @@ import matplotlib.path as mpath
 import cartopy.crs as ccrs
 import cartopy.util
 
-kt = ['0.0', '1.0', '2.0']
+kt = ['0.0', '0.4', '4.0']
 #kt = ['1.0']
-tr = 'hat'
+tr = 'ring'
 
 for ikt in kt:
     PATH = '../model_output/netcdf/ann57.-70.-nu4-urlx-kt%s-%s.c-0020.T85.nc' % (ikt,tr)
