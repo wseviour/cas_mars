@@ -6,6 +6,7 @@ import os
 import matplotlib
 matplotlib.use('qt5agg')
 import matplotlib.pyplot as plt
+import matplotlib.mlab as mlab
 import cartopy.crs as ccrs
 import cartopy.util
 import matplotlib.path as mpath
@@ -16,17 +17,18 @@ from shapely.geometry import shape
 from scipy.optimize import curve_fit
 import xarray as xr
 
+
 class Cas:
     """
     Perform CAS calculations
     """
-    def __init__(self, run_dir, start_time, ndays, time_step, model_type='SWM', level=None):
-        self.run_dir = run_dir
+    def __init__(self, ds, working_dir, start_time, ndays, time_step, model_type='SWM'):
+        self.ds = ds
+        self.working_dir = working_dir
         self.start_time = start_time
         self.ndays = ndays
         self.time_step = time_step
         self.model_type = model_type
-        self.level = level
 
     def exp_func(self, x, a, b):
         """
@@ -78,6 +80,8 @@ class Cas:
         try:
             popt,pcov = curve_fit(self.exp_func, np.arange(len(lens[:30])), lens[:30], p0=(0.1,0.01))
             rate = popt[1]/time_step
+            if rate < 0:
+                rate = 0.0
             return rate
         except RuntimeError:
             print('no exponential fit')
@@ -94,166 +98,62 @@ class Cas:
         nlat = 92
         remainder = 4  # remainder after writing u 5 lon points at a time
         
-        if self.model_type == 'SWM':
-            # First check if wind files already exist
-            file_list = [self.run_dir+'winds/u%.5d' % istep for istep in range(self.start_time,self.start_time+nsteps)]
-            file_test = [os.path.isfile(f) for f in file_list]
-            if all(file_test):
-                print("winds already exist, no need to interpolate them")
-                return
+        # First check if wind files already exist
+        file_list = [self.working_dir+'winds/u%.5d' % istep for istep in range(self.start_time,self.start_time+nsteps)]
+        file_test = [os.path.isfile(f) for f in file_list]
+        if all(file_test):
+            print("winds already exist, no need to interpolate them")
+            return
+        else:
+            print("not all wind file available, interpolating...")
+
+            if os.path.isdir(self.working_dir+'winds'):
+                os.system('rm -f '+self.working_dir+'winds/*')
             else:
-                print("not all wind file available, interpolating...")
+                os.system('mkdir '+self.working_dir+'winds')
 
-                ds = ds_from_BOB(self.run_dir, ['u','v'], 85, time_step=self.time_step)
+            # Interpolate to new grid for CAS
+            new_lon = np.arange(0,360,360./nlon)
+            new_lat = np.arange(0, 90, 90./nlat)[::-1]
+            ds_cas = self.ds.interp(latitude=new_lat,longitude=new_lon, kwargs={'fill_value':None})
 
-                if os.path.isdir(self.run_dir+'winds'):
-                    os.system('rm -f '+self.run_dir+'winds/*')
-                else:
-                    os.system('mkdir '+self.run_dir+'winds')
+            for istep in range(self.start_time,self.start_time+nsteps):
+                with open(self.working_dir+'winds/u'+'%05d' % istep, 'w') as csvfile:
+                    print('Writing '+self.working_dir+'winds/u'+'%05d' % istep)
+                    writer = csv.writer(csvfile, delimiter=' ')
+                    for ilat in range(nlat):
+                        for iline in range(nlon//5):
+                            writer.writerow(ds_cas['u'][istep,ilat,iline*5:5+iline*5].data)
+                        writer.writerow(ds_cas['u'][istep,ilat,-remainder:].data)
 
-                # Restrict to NH
-                #nlat = int(len(ds.coords['latitude'])/2)
-                #ds = ds.isel(latitude=slice(None,nlat))
-                ds = ds.sel(latitude=slice(90,0))
-
-                # Interpolate to new grid
-                new_lon = np.arange(0,360,360./nlon)
-                new_lat = np.arange(0, 90, 90./nlat)[::-1]
-                ds_cas = ds.interp(latitude=new_lat,longitude=new_lon, kwargs={'fill_value':None})
-
-                for istep in range(self.start_time,self.start_time+nsteps):
-                    with open(self.run_dir+'winds/u'+'%05d' % istep, 'w') as csvfile:
-                        print('Writing '+self.run_dir+'winds/u'+'%05d' % istep)
-                        writer = csv.writer(csvfile, delimiter=' ')
-                        for ilat in range(nlat):
-                            for iline in range(nlon//5):
-                                writer.writerow(ds_cas['u'][istep,ilat,iline*5:5+iline*5].data)
-                            writer.writerow(ds_cas['u'][istep,ilat,-remainder:].data)
-
-                for istep in range(self.start_time,self.start_time+nsteps):
-                    with open(self.run_dir+'winds/v'+'%05d' % istep, 'w') as csvfile:
-                        print('Writing '+self.run_dir+'winds/v'+'%05d' % istep)
-                        writer = csv.writer(csvfile, delimiter=' ')
-                        for ilat in range(nlat):
-                            for iline in range(nlon//5):
-                                writer.writerow(ds_cas['v'][istep,ilat,iline*5:5+iline*5].data)
-                            writer.writerow(ds_cas['v'][istep,ilat,-remainder:].data)
-                
-        elif self.model_type == 'MarsWRF':
-            # First check if wind files already exist
-            file_list = [self.run_dir+'winds_Z%.2d/u%.5d' % (self.level,istep) for istep in range(self.start_time,self.start_time+nsteps)]
-            file_test = [os.path.isfile(f) for f in file_list]
-            if all(file_test):
-                print("winds already exist, no need to interpolate them")
-                return
-            else:
-                print("not all wind file available, interpolating...")
-
-                if os.path.isdir(self.run_dir+'winds_Z%.2d' % self.level):
-                    os.system('rm -f '+self.run_dir+'winds_Z%.2d/*' % self.level)
-                else:
-                    os.system('mkdir '+self.run_dir+'winds_Z%.2d/' % self.level)
+            for istep in range(self.start_time,self.start_time+nsteps):
+                with open(self.working_dir+'winds/v'+'%05d' % istep, 'w') as csvfile:
+                    print('Writing '+self.working_dir+'winds/v'+'%05d' % istep)
+                    writer = csv.writer(csvfile, delimiter=' ')
+                    for ilat in range(nlat):
+                        for iline in range(nlon//5):
+                            writer.writerow(ds_cas['v'][istep,ilat,iline*5:5+iline*5].data)
+                        writer.writerow(ds_cas['v'][istep,ilat,-remainder:].data)
 
 
-                ds_raw = xr.open_mfdataset(self.run_dir+'*.nc', concat_dim='Time')
-                #ds_raw = xr.open_mfdataset('../MarsWRF_data/*.nc', concat_dim='Time')
+    def make_contours(self, con_var='q', lats=np.arange(50,86,2), plot=False):
 
-                ds_raw = ds_raw.where(ds_raw.L_S < 300, drop=True) # Drop missing values in MarsWRF files
-
-                lat = ds_raw.LAT[0,:,0]
-                lon = ds_raw.LON[0,0,:] % 360 # make sure in 0-360 format, not -180-180
-                lon = np.append(lon[90:],lon[:90])
-                theta = ds_raw.THETA[0,:]
-                l_s = ds_raw.L_S
-
-                U = ds_raw.U.data
-                V = ds_raw.V.data
-                EPV = ds_raw.EPV.data
-                U = np.append(U[:,:,:,90:],U[:,:,:,:90], axis=3)
-                V = np.append(U[:,:,:,90:],U[:,:,:,:90], axis=3)
-                EPV = np.append(U[:,:,:,90:],U[:,:,:,:90], axis=3)            
-
-                ds = xr.Dataset({'u':(['l_s','theta','latitude','longitude'], U),
-                                 'v':(['l_s','theta','latitude','longitude'], V),
-                                 'q':(['l_s','theta','latitude','longitude'], EPV)},
-                                 coords = {'l_s':('l_s',l_s),
-                                           'theta':('theta',theta),
-                                           'latitude':('latitude',lat),
-                                           'longitude':('longitude',lon)})
-
-                ds = ds.isel(theta=self.level) # Select given level
-                #ds = ds.isel(theta=15) # Select given level
-                ds = ds.sel(latitude=slice(0,90))
-                new_lon = np.arange(0,360,360./nlon)
-                new_lat = np.arange(0, 90, 90./nlat)[::-1]
-                ds_cas = ds.interp(latitude=new_lat,longitude=new_lon, kwargs={'fill_value':None})
-
-                for istep in range(self.start_time,self.start_time+nsteps):
-                    with open(self.run_dir+'winds_Z%.2d/u%05d' % (self.level,istep), 'w') as csvfile:
-                        print('Writing '+self.run_dir+'winds_Z%.2d/u%05d' % (self.level,istep))
-                        writer = csv.writer(csvfile, delimiter=' ')
-                        for ilat in range(nlat):
-                            for iline in range(nlon//5):
-                                writer.writerow(ds_cas['u'][istep,ilat,iline*5:5+iline*5].data)
-                            writer.writerow(ds_cas['u'][istep,ilat,-remainder:].data)
-
-                for istep in range(self.start_time,self.start_time+nsteps):
-                    with open(self.run_dir+'winds_Z%.2d/v%05d' % (self.level,istep), 'w') as csvfile:
-                        print('Writing '+self.run_dir+'winds_Z%.2d/v%05d' % (self.level,istep))
-                        writer = csv.writer(csvfile, delimiter=' ')
-                        for ilat in range(nlat):
-                            for iline in range(nlon//5):
-                                writer.writerow(ds_cas['v'][istep,ilat,iline*5:5+iline*5].data)
-                            writer.writerow(ds_cas['v'][istep,ilat,-remainder:].data)
-
-    def make_contours(self, con_var='q',lats=np.arange(50,86,2)):
-        """
-        Produce contours for input into CAS
-        """
-        if os.path.isdir(self.run_dir+'contours'):
+        if os.path.isdir(self.working_dir+'contours'):
             try:
-                os.system('rm -f '+self.run_dir+'contours/*.in')
+                os.system('rm -f '+self.working_dir+'contours/*.in')
             except OSError:
                 pass
         else:
-            os.system('mkdir '+self.run_dir+'contours')
-
-        if self.model_type == 'SWM':
-            ds = ds_from_BOB(self.run_dir, [con_var], 85, time_step=self.time_step)
-        elif self.model_type == 'MarsWRF':
-            ds_raw = xr.open_mfdataset(self.run_dir+'*.nc', concat_dim='Time')
-            ds_raw = ds_raw.where(ds_raw.L_S < 300, drop=True) # Drop missing values in MarsWRF files
-            lat = ds_raw.LAT[0,:,0]
-            lon = ds_raw.LON[0,0,:] % 360 # make sure in 0-360 format, not -180-180
-            lon = np.append(lon[90:],lon[:90])
-            theta = ds_raw.THETA[0,:]
-            l_s = ds_raw.L_S
-            U = ds_raw.U.data
-            V = ds_raw.V.data
-            EPV = ds_raw.EPV.data
-            U = np.append(U[:,:,:,90:],U[:,:,:,:90], axis=3)
-            V = np.append(U[:,:,:,90:],U[:,:,:,:90], axis=3)
-            EPV = np.append(U[:,:,:,90:],U[:,:,:,:90], axis=3)            
-
-            ds = xr.Dataset({'u':(['l_s','theta','latitude','longitude'], U),
-                             'v':(['l_s','theta','latitude','longitude'], V),
-                             'q':(['l_s','theta','latitude','longitude'], EPV)},
-                             coords = {'l_s':('l_s',l_s),
-                                       'theta':('theta',theta),
-                                       'latitude':('latitude',lat),
-                                       'longitude':('longitude',lon)})
-            ds = ds.sel(latitude=slice(0,90))
-            ds = ds.isel(theta=self.level) # Select given level
+            os.system('mkdir '+self.working_dir+'contours')
         
-        ds_zm = ds[con_var].mean(dim='longitude')[self.start_time,:]
-        lats = np.arange(50,86,2) # approx lats for PV contours
-
-        cons = ds_zm.interp(latitude=lats).data
-
-        #cons = [0.5,0.6,0.7,0.8,0.9,1.0,1.1,1.2,1.3,1.4,1.35,1.3,1.2,1.1]
-
-        lats = ds.coords['latitude'].data
-        lons = ds.coords['longitude'].data
+        # Only use 90 - 20 latitude
+        d = self.ds[con_var].sel(latitude = slice(90,20))[self.start_time,:]
+        
+        #cons = d.mean(dim = 'longitude').interp(latitude=lats).data
+        cons = d.sel({'latitude':lats,'longitude':0}, method='nearest').data
+        
+        lats = d.coords['latitude'].data
+        lons = d.coords['longitude'].data
         count=0
 
         for icon in cons:
@@ -271,48 +171,40 @@ class Cas:
             ax.set_boundary(circle, transform=ax.transAxes)
             ax.set_extent([-180, 180,20, 90], ccrs.PlateCarree())
             ax.gridlines()
-            cyclic_data, cyclic_lons = cartopy.util.add_cyclic_point(ds[con_var][self.start_time,:].data, coord = lons) ##
+            cyclic_data, cyclic_lons = cartopy.util.add_cyclic_point(d.data, coord = lons) ##
             con1 = ax.contourf(cyclic_lons, lats, cyclic_data,cmap='viridis', transform=ccrs.PlateCarree())
             con = ax.contour(cyclic_lons, lats, cyclic_data,[icon],colors='k', transform=ccrs.PlateCarree())
-            if len(con.allsegs[0]) == 1:
-                a = con.allsegs[0][0]
+
+            fig2 = plt.figure()
+            p = d.roll(longitude=0).plot.contour(levels=[icon])
+            plt.close()
+            
+            if len(p.allsegs[0]) == 1:
+                a = p.allsegs[0][0]
             else:
-                print('checking for merged contours')
-                # First check if any contours are adjacent
-                all_cons = np.vstack(con.allsegs[0])
-                splits=[]
-                for i in range(all_cons.shape[0]-1):
-                    diff = self.haversine(all_cons[i,1],all_cons[i,0],all_cons[i+1,1],all_cons[i+1,0])
-                    if diff > 500:
-                        splits.append(i)
-                
-                print(splits)
-                merged_cons = np.split(all_cons, splits)
-                if len(merged_cons) == 1:
-                    a = merged_cons[0]
+                lens = [p.allsegs[0][i].shape[0] for i in range(len(p.allsegs[0]))] 
+                if inner:
+                    # 2nd longest contour
+                    a = p.allsegs[0][np.where(lens == np.sort(lens)[-2])[0][0]]
                 else:
-                    lens = np.zeros(len(merged_cons))
-                    for iicon in range(len(merged_cons)):
-                        lens[iicon] = self.calc_con_len(merged_cons[iicon])
-                    if inner:
-                        # 2nd longest contour
-                        a = merged_cons[np.where(lens == np.sort(lens)[-2])[0][0]]
-                    else:
-                        a = merged_cons[np.argmax(lens)]
-                a = a[1:,:]
+                    a = p.allsegs[0][np.argmax(lens)]
+                #a = a[1:,:]
             a = a[a[:,0]<360]
-            plt.plot(a[:,0],a[:,1], transform=ccrs.Geodetic(), color='red')
+            ax.plot(a[:,0],a[:,1], transform=ccrs.Geodetic(), color='red')
             plt.tight_layout()
-            plt.show()
+            if plot:
+                plt.show()
             plt.close()
 
-            if a[:,0][0] > a[:,1][1]:
+            if a[:,0][0] > a[:,0][1]:
                 a = a[::-1,:]
 
+           
+            
             if inner:
-                filename = self.run_dir+'contours/%s_%.4f_tstep_%s_inner.in' % (con_var,icon,self.start_time)
+                filename = self.working_dir+'contours/%s_%.4f_tstep_%s_inner.in' % (con_var,icon,self.start_time)
             else:
-                filename = self.run_dir+'contours/%s_%.4f_tstep_%s.in' % (con_var,icon,self.start_time)
+                filename = self.working_dir+'contours/%s_%.4f_tstep_%s.in' % (con_var,icon,self.start_time)
 
             with open(filename, "w") as csvfile:
                 csvfile.write("Contour Advection with Surgery\n")
@@ -329,19 +221,21 @@ class Cas:
 
             count +=1
 
+
+
     def run_cas(self):
         """
         Run CAS over all contours
         """
-        cons = sorted([os.path.basename(x) for x in glob.glob(self.run_dir+"contours/*.in")])
+        cons = sorted([os.path.basename(x) for x in glob.glob(self.working_dir+"contours/*.in")])
 
-        if os.path.isdir(self.run_dir+'cas_output'):
+        if os.path.isdir(self.working_dir+'cas_output'):
             try:
-                os.system('rm -f '+self.run_dir+'cas_output/*.cas')
+                os.system('rm -f '+self.working_dir+'cas_output/*.cas')
             except OSError:
                 pass
         else:
-            os.system('mkdir '+self.run_dir+'cas_output')
+            os.system('mkdir '+self.working_dir+'cas_output')
 
         os.chdir('../cas')
 
@@ -355,10 +249,10 @@ class Cas:
         for icon in cons:
             print("**** %s ****" % icon)
             os.system("rm -r winds")
-            os.system("cp -R %s/winds winds" % self.run_dir)
-            os.system("cp %s/contours/%s con.in" % (self.run_dir,icon))
+            os.system("cp -R %s/winds winds" % self.working_dir)
+            os.system("cp %s/contours/%s con.in" % (self.working_dir,icon))
             os.system("./cas < run_params.in")
-            os.system("cp output.cas %s/cas_output/%s.cas" % (self.run_dir, icon))
+            os.system("cp output.cas %s/cas_output/%s.cas" % (self.working_dir, icon))
 
         os.chdir('../python')
 
@@ -366,7 +260,7 @@ class Cas:
         """
         Read CAS output and return dictionary of contour coords and lengths
         """
-        cas_files = sorted(glob.glob(self.run_dir+"cas_output/*.cas"))
+        cas_files = sorted(glob.glob(self.working_dir+"cas_output/*.cas"))
 
         cons_dic = {}
         lens_dic = {}
@@ -427,7 +321,7 @@ class Cas:
             for icon in cons:
                 lens.append(self.calc_con_len(icon))
 
-            conname = ifile.split('/')[-1].split('_')[1][:6]
+            conname = ifile.split('/')[-1]
 
             cons_dic[conname] = cons
             lens_dic[conname] = lens
@@ -450,30 +344,223 @@ class Cas:
 
         return len_rates
 
+    
+    def plot_cas(self, plot_day):
+
+        cons, lens = self.read_cons_lens()
+        lats = self.ds.coords['latitude'].data
+        lons = self.ds.coords['longitude'].data
+        
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection=ccrs.NorthPolarStereo())
+        theta = np.linspace(0, 2*np.pi, 100)
+        center, radius = [0.5, 0.5], 0.5
+        verts = np.vstack([np.sin(theta), np.cos(theta)]).T
+        circle = mpath.Path(verts * radius + center)
+        ax.set_boundary(circle, transform=ax.transAxes)
+        ax.set_extent([-180, 180,30, 90], ccrs.PlateCarree())
+        ax.gridlines()
+        cyclic_data, cyclic_lons = cartopy.util.add_cyclic_point(self.ds.q[start_time+int(plot_day/self.time_step),:].data, coord = lons)
+        pv = ax.contourf(cyclic_lons, lats,cyclic_data, cmap='Blues', transform=ccrs.PlateCarree(),extend='both')
+        for key in cons.keys():
+            con = cons[key][int(plot_day/time_step)]
+            ax.plot(con[:,0], con[:,1], transform=ccrs.Geodetic(),color='k')
+        ax.set_title('day '+str(plot_day))
+        plt.show()
+        
+        
+def read_MarsWRF(level=0):
+    """
+    Read MarsWRF data at a given theta level, return a xarray Dataset
+    """
+    ds_raw = xr.open_mfdataset('../MarsWRF_data/*.nc', concat_dim='Time')
+    ds_raw = ds_raw.where(ds_raw.L_S < 300, drop=True) # Drop missing values in MarsWRF files
+    lat = ds_raw.LAT[0,:,0]
+    lon = ds_raw.LON[0,0,:] % 360 # make sure in 0-360 format, not -180-180
+    lon = np.append(lon[90:],lon[:90])
+    theta = ds_raw.THETA[0,:]
+    l_s = ds_raw.L_S
+
+    print('Reading MarsWRF data at theta = '+str(theta[level].data))
+    
+    U = ds_raw.U.data
+    V = ds_raw.V.data
+    EPV = ds_raw.EPV.data
+    U = np.append(U[:,:,:,90:],U[:,:,:,:90], axis=3)
+    V = np.append(V[:,:,:,90:],V[:,:,:,:90], axis=3)
+    EPV = np.append(EPV[:,:,:,90:],EPV[:,:,:,:90], axis=3)            
+
+    ds = xr.Dataset({'u':(['time','theta','latitude','longitude'], U),
+                     'v':(['time','theta','latitude','longitude'], V),
+                     'q':(['time','theta','latitude','longitude'], EPV)},
+                     coords = {'time':('time',l_s),
+                               'theta':('theta',theta),
+                               'latitude':('latitude',lat),
+                               'longitude':('longitude',lon)})
+
+    ds = ds.isel(theta=level) # Select given level
+    ds = ds.sel(latitude=slice(0,90))
+
+    return ds
 
 
 if __name__ == '__main__':
 
-    PATH = '../model_output/'
-    #ext = 'res_test57.-70.-nu4-urlx-kt4.0.c-0020sat200.0.T85/'
-    ext = 'ann57.-70.-nu4-urlx-kt2.0-sinlat.c-0020.T85/'
-    ndays = 20 # number days for CAS calculation
-    start_time = 200 # starting time step of CAS
-    time_step= 0.5 # time step in SWM
-    res = 85 # resolution of SWM
 
+    ndays = 10 # number days for CAS calculation
+    start_time = 200 # starting time step of CAS
+    time_step= 0.25 # time step in SWM
+
+
+    ############# SWM test ############
+    run_name = 'ann57.-70.-nu4-urlx-kt2.0-ring.c-0020.T85.nc'
+
+    ds = xr.open_dataset('../model_output/netcdf/'+run_name)
+
+    working_dir = '../model_output/cas/'+run_name+'/'
+    if os.path.isdir(working_dir):
+        pass
+    else:
+        os.system('mkdir '+working_dir)
+
+    ############# MarsWRF test ###############
+    # level = 10
+    # ds = read_MarsWRF(level=level)
+
+    # working_dir = '../MarsWRF_data/cas/Z%.2d/' % level
+    # if os.path.isdir(working_dir):
+    #     pass
+    # else:
+    #     os.system('mkdir '+working_dir)  
+        
+
+    CA = Cas(ds, working_dir, start_time, ndays, time_step)
+    #CA.interpolate_winds()
+    CA.make_contours(lats=np.arange(50,86,2),plot=False)
+    CA.run_cas()
+
+    CA.plot_cas(0)
     # Cas = Cas(PATH+ext, start_time, ndays, time_step)
     # Cas.interpolate_winds()
-    # Cas.make_contours(con_var='q')
+    # Cas.make_contours(con_var='q',plot=True)
     # Cas.run_cas()
     # len_rates = Cas.len_rate_eqlat()
 
-    Cas = Cas('../MarsWRF_data/',100,10,0.5,model_type='MarsWRF',level=10)
+    #Cas = Cas('../MarsWRF_data/',100,10,0.25,model_type='MarsWRF',level=10)
     #Cas.interpolate_winds()
-    Cas.make_contours(con_var='q')
+    #Cas.make_contours(con_var='q',lats=[65],plot=True)
+    #Cas.run_cas()
+
     
     # interpolate_winds(PATH+ext, start_time, ndays, time_step)
     # make_contours(PATH+ext, start_time, ndays, con_var='q')
     # run_cas(PATH+ext,start_time)
     #
     # len_rates = len_rate_eqlat(PATH+ext, time_step)
+
+
+        # def make_contours(self, con_var='q', lats=np.arange(50,86,2), plot=False):
+
+        # if os.path.isdir(self.working_dir+'contours'):
+        #     try:
+        #         os.system('rm -f '+self.working_dir+'contours/*.in')
+        #     except OSError:
+        #         pass
+        # else:
+        #     os.system('mkdir '+self.working_dir+'contours')
+        
+        # # Only use 90 - 20 latitude
+        # d = self.ds[con_var].sel(latitude = slice(90,20))[self.start_time,:]
+        
+        # # Find contour levels by interpolation at lon=0
+        # cons = d.mean(dim = 'longitude').interp(latitude=lats).data
+
+        # pa = Proj("+proj=stere +lat_0=90",preserve_units=True)
+        # lonv, latv = np.meshgrid(d.longitude.data, d.latitude.data)
+        # x, y = pa(lonv,latv)
+        # reg_x = np.linspace(np.min(x),np.max(x),500)
+        # reg_y = np.linspace(np.min(y),np.max(y),500)    
+        # xi, yi = np.meshgrid(reg_x, reg_y)
+        # d2 = mlab.griddata(x.flatten(),y.flatten(),d.data.flatten(),xi,yi,interp='linear')
+
+        # count = 0
+        # for icon in cons:
+
+        #     inner = False
+        #     if count > 0:
+        #         if cons[count-1] > icon:
+        #             inner = True
+            
+        #     fig = plt.figure(figsize=(10,5))
+        #     ax1 = fig.add_subplot(1,2,1)
+        #     ax1.contourf(reg_x,reg_y,d2)
+        #     xycon = ax1.contour(reg_x,reg_y,d2,[icon],colors='k')
+            
+        #     latloncon = []
+        #     for icon in range(len(xycon.allsegs[0])):
+        #         ilons, ilats = pa(xycon.allsegs[0][icon][:,0],xycon.allsegs[0][icon][:,1],inverse=True)
+        #         ilons = ilons % 360
+        #         latloncon.append(np.vstack((ilons,ilats)).T)
+                
+            
+        #     if len(latloncon) == 1:
+        #         a = latloncon[0]
+        #     else:
+        #         print('more than one contour')
+        #         lens = np.zeros(len(latloncon))
+        #         for iicon in range(len(latloncon)):
+        #             lens[iicon] = self.calc_con_len(latloncon[iicon])
+        #         if inner:
+        #             # 2nd longest contour
+        #             a = latloncon[np.where(lens == np.sort(lens)[-2])[0][0]]
+        #         else:
+        #             a = latloncon[np.argmax(lens)]
+
+        #     a = a[:-1,:]
+        #     #lon, lat = pa(a[:,0],a[:,1],inverse=True)
+        #     #lon = lon % 360
+
+        #     #a[:,0] = lon
+        #     #a[:,1] = lat
+        #     # if a[0,0] > a[1,0]:
+        #     #     a = a[::-1,:]
+            
+        #     if plot:
+        #         lats = d.coords['latitude'].data
+        #         lons = d.coords['longitude'].data
+        #         #ax1.plot(a[:,0],a[:,1],color='red')
+        #         ax2 = fig.add_subplot(1,2,2,projection=ccrs.NorthPolarStereo())
+        #         theta = np.linspace(0, 2*np.pi, 100)
+        #         center, radius = [0.5, 0.5], 0.5
+        #         verts = np.vstack([np.sin(theta), np.cos(theta)]).T
+        #         circle = mpath.Path(verts * radius + center)
+        #         ax2.set_boundary(circle, transform=ax2.transAxes)
+        #         ax2.set_extent([-180, 180,20, 90], ccrs.PlateCarree())
+        #         ax2.gridlines()
+        #         cyclic_data, cyclic_lons = cartopy.util.add_cyclic_point(d.data, coord = lons) ##
+        #         con1 = ax2.contourf(cyclic_lons, lats, cyclic_data, transform=ccrs.PlateCarree())
+        #         con = ax2.contour(cyclic_lons, lats, cyclic_data,[icon],colors='k', transform=ccrs.PlateCarree())
+        #         ax2.plot(a[:,0],a[:,1], transform=ccrs.Geodetic(), color='red')
+        #         plt.show()
+        #     else:
+        #         plt.close()
+
+        #     if inner:
+        #         filename = self.working_dir+'contours/%s_%.7f_tstep_%s_inner.in' % (con_var,icon,self.start_time)
+        #     else:
+        #         filename = self.working_dir+'contours/%s_%.7f_tstep_%s.in' % (con_var,icon,self.start_time)
+
+        #     with open(filename, "w") as csvfile:
+        #         csvfile.write("Contour Advection with Surgery\n")
+        #         csvfile.write("%s %.4f contour\n" % (con_var,icon))
+        #         csvfile.write("\n")
+        #         csvfile.write("%s  24  %.7f  %.7f  0.10000000  0.0000000\n" % (self.ndays,self.time_step,self.time_step))
+        #         csvfile.write("1 %s 0.00000\n" % a.shape[0])
+        #         csvfile.write("%s %d %d 1.00000\n" % (a.shape[0], a[0,0], a[0,1]))
+
+        #     with open(filename, "a") as csvfile:
+        #         writer = csv.writer(csvfile, delimiter=' ')
+        #         for irow in range(a.shape[0]):
+        #             writer.writerow(a[irow,:])
+            
+        #     count += 1
