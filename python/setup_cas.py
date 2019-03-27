@@ -137,7 +137,10 @@ class Cas:
 
 
     def make_contours(self, con_var='q', lats=np.arange(50,86,2), plot=False):
-
+        """
+        Old contouring function, should probably remove soon.
+        """
+        
         if os.path.isdir(self.working_dir+'contours'):
             try:
                 os.system('rm -f '+self.working_dir+'contours/*.in')
@@ -199,8 +202,9 @@ class Cas:
             if a[:,0][0] > a[:,0][1]:
                 a = a[::-1,:]
 
-           
-            
+
+            a = np.append(a, a[-1,:][np.newaxis,:], axis=0)
+                
             if inner:
                 filename = self.working_dir+'contours/%s_%.4f_tstep_%s_inner.in' % (con_var,icon,self.start_time)
             else:
@@ -222,6 +226,113 @@ class Cas:
             count +=1
 
 
+    def make_contours2(self, con_var='q', lats=np.arange(50,86,2), plot=False):
+        """
+        Make contours for input into CAS. This method uses projection in to 
+        x,y coordinates to avoid problem of contour segments cut off by prime
+        meridian.
+        """
+
+        if os.path.isdir(self.working_dir+'contours'):
+            try:
+                os.system('rm -f '+self.working_dir+'contours/*.in')
+            except OSError:
+                pass
+        else:
+            os.system('mkdir '+self.working_dir+'contours')
+        
+        # Only use 90 - 20 latitude
+        d = self.ds[con_var].sel(latitude = slice(90,20))[self.start_time,:]
+        
+        # Find contour levels by interpolation at lon=0
+        cons = d.mean(dim = 'longitude').interp(latitude=lats).data
+        print(cons)
+        pa = Proj("+proj=stere +lat_0=90",preserve_units=True)
+        lonv, latv = np.meshgrid(d.longitude.data, d.latitude.data)
+        x, y = pa(lonv,latv)
+        reg_x = np.linspace(np.min(x),np.max(x),500)
+        reg_y = np.linspace(np.min(y),np.max(y),500)    
+        xi, yi = np.meshgrid(reg_x, reg_y)
+        d2 = mlab.griddata(x.flatten(),y.flatten(),d.data.flatten(),xi,yi,interp='linear')
+
+        count = 0
+        for icon in cons:
+
+            inner = False
+            if count > 0:
+                if cons[count-1] > icon:
+                    inner = True
+            
+            fig = plt.figure(figsize=(10,5))
+            ax1 = fig.add_subplot(1,2,1)
+            ax1.contourf(reg_x,reg_y,d2)
+            xycon = ax1.contour(reg_x,reg_y,d2,[icon],colors='k')
+            
+            latloncon = []
+            for iicon in range(len(xycon.allsegs[0])):
+                ilons, ilats = pa(xycon.allsegs[0][iicon][:,0],xycon.allsegs[0][iicon][:,1],inverse=True)
+                ilons = ilons % 360
+                latloncon.append(np.vstack((ilons,ilats)).T)
+                
+            
+            if len(latloncon) == 1:
+                a = latloncon[0]
+            else:
+                print('more than one contour')
+                lens = np.zeros(len(latloncon))
+                for iicon in range(len(latloncon)):
+                    lens[iicon] = self.calc_con_len(latloncon[iicon])
+                if inner:
+                    # 2nd longest contour
+                    a = latloncon[np.where(lens == np.sort(lens)[-2])[0][0]]
+                else:
+                    a = latloncon[np.argmax(lens)]
+
+            # This bit is important!
+            # CA algorithm requires contour starting at meridian
+            mina =  np.argmin(a[:,0])
+            a = np.append(a[mina:,:],a[:mina,:], axis=0)
+            
+            if plot:
+                lats = d.coords['latitude'].data
+                lons = d.coords['longitude'].data
+                #ax1.plot(a[:,0],a[:,1],color='red')
+                ax2 = fig.add_subplot(1,2,2,projection=ccrs.NorthPolarStereo())
+                theta = np.linspace(0, 2*np.pi, 100)
+                center, radius = [0.5, 0.5], 0.5
+                verts = np.vstack([np.sin(theta), np.cos(theta)]).T
+                circle = mpath.Path(verts * radius + center)
+                ax2.set_boundary(circle, transform=ax2.transAxes)
+                ax2.set_extent([-180, 180,20, 90], ccrs.PlateCarree())
+                ax2.gridlines()
+                cyclic_data, cyclic_lons = cartopy.util.add_cyclic_point(d.data, coord = lons) ##
+                con1 = ax2.contourf(cyclic_lons, lats, cyclic_data, transform=ccrs.PlateCarree())
+                con = ax2.contour(cyclic_lons, lats, cyclic_data,[icon],colors='k', transform=ccrs.PlateCarree())
+                ax2.plot(a[:,0],a[:,1], transform=ccrs.Geodetic(), color='red')
+                plt.show()
+            else:
+                plt.close()
+
+            if inner:
+                filename = self.working_dir+'contours/%s_%.7f_tstep_%s_inner.in' % (con_var,icon,self.start_time)
+            else:
+                filename = self.working_dir+'contours/%s_%.7f_tstep_%s.in' % (con_var,icon,self.start_time)
+
+            with open(filename, "w") as csvfile:
+                csvfile.write("Contour Advection with Surgery\n")
+                csvfile.write("%s %.4f contour\n" % (con_var,icon))
+                csvfile.write("\n")
+                csvfile.write("%s  24  %.7f  %.7f  0.10000000  0.0000000\n" % (self.ndays,self.time_step,self.time_step))
+                csvfile.write("1 %s 0.00000\n" % a.shape[0])
+                csvfile.write("%s %d %d 1.00000\n" % (a.shape[0], a[0,0], a[0,1]))
+
+            with open(filename, "a") as csvfile:
+                writer = csv.writer(csvfile, delimiter=' ')
+                for irow in range(a.shape[0]):
+                    writer.writerow(a[irow,:])
+            
+            count += 1
+            
 
     def run_cas(self):
         """
@@ -364,6 +475,7 @@ class Cas:
         pv = ax.contourf(cyclic_lons, lats,cyclic_data, cmap='Blues', transform=ccrs.PlateCarree(),extend='both')
         for key in cons.keys():
             con = cons[key][int(plot_day/time_step)]
+            con = np.append(con, con[0,:][np.newaxis,:],axis=0)
             ax.plot(con[:,0], con[:,1], transform=ccrs.Geodetic(),color='k')
         ax.set_title('day '+str(plot_day))
         plt.show()
@@ -381,7 +493,7 @@ def read_MarsWRF(level=0):
     theta = ds_raw.THETA[0,:]
     l_s = ds_raw.L_S
 
-    print('Reading MarsWRF data at theta = '+str(theta[level].data))
+    print('Reading MarsWRF data at theta = '+str(theta.data[level]))
     
     U = ds_raw.U.data
     V = ds_raw.V.data
@@ -400,6 +512,7 @@ def read_MarsWRF(level=0):
 
     ds = ds.isel(theta=level) # Select given level
     ds = ds.sel(latitude=slice(0,90))
+    ds = ds.sortby('latitude',ascending=False)
 
     return ds
 
@@ -409,7 +522,7 @@ if __name__ == '__main__':
 
     ndays = 10 # number days for CAS calculation
     start_time = 200 # starting time step of CAS
-    time_step= 0.25 # time step in SWM
+    time_step= 0.25 # time step in model (should be 0.25 for MarsWRF)
 
 
     ############# SWM test ############
@@ -424,143 +537,21 @@ if __name__ == '__main__':
         os.system('mkdir '+working_dir)
 
     ############# MarsWRF test ###############
-    # level = 10
+    # level = 6
     # ds = read_MarsWRF(level=level)
 
     # working_dir = '../MarsWRF_data/cas/Z%.2d/' % level
     # if os.path.isdir(working_dir):
     #     pass
     # else:
-    #     os.system('mkdir '+working_dir)  
+    #     os.system('mkdir '+working_dir)
+        
         
 
     CA = Cas(ds, working_dir, start_time, ndays, time_step)
-    #CA.interpolate_winds()
-    CA.make_contours(lats=np.arange(50,86,2),plot=False)
+    CA.interpolate_winds()
+    CA.make_contours2(lats=np.arange(50,86,2),plot=False)
     CA.run_cas()
 
     CA.plot_cas(0)
-    # Cas = Cas(PATH+ext, start_time, ndays, time_step)
-    # Cas.interpolate_winds()
-    # Cas.make_contours(con_var='q',plot=True)
-    # Cas.run_cas()
-    # len_rates = Cas.len_rate_eqlat()
 
-    #Cas = Cas('../MarsWRF_data/',100,10,0.25,model_type='MarsWRF',level=10)
-    #Cas.interpolate_winds()
-    #Cas.make_contours(con_var='q',lats=[65],plot=True)
-    #Cas.run_cas()
-
-    
-    # interpolate_winds(PATH+ext, start_time, ndays, time_step)
-    # make_contours(PATH+ext, start_time, ndays, con_var='q')
-    # run_cas(PATH+ext,start_time)
-    #
-    # len_rates = len_rate_eqlat(PATH+ext, time_step)
-
-
-        # def make_contours(self, con_var='q', lats=np.arange(50,86,2), plot=False):
-
-        # if os.path.isdir(self.working_dir+'contours'):
-        #     try:
-        #         os.system('rm -f '+self.working_dir+'contours/*.in')
-        #     except OSError:
-        #         pass
-        # else:
-        #     os.system('mkdir '+self.working_dir+'contours')
-        
-        # # Only use 90 - 20 latitude
-        # d = self.ds[con_var].sel(latitude = slice(90,20))[self.start_time,:]
-        
-        # # Find contour levels by interpolation at lon=0
-        # cons = d.mean(dim = 'longitude').interp(latitude=lats).data
-
-        # pa = Proj("+proj=stere +lat_0=90",preserve_units=True)
-        # lonv, latv = np.meshgrid(d.longitude.data, d.latitude.data)
-        # x, y = pa(lonv,latv)
-        # reg_x = np.linspace(np.min(x),np.max(x),500)
-        # reg_y = np.linspace(np.min(y),np.max(y),500)    
-        # xi, yi = np.meshgrid(reg_x, reg_y)
-        # d2 = mlab.griddata(x.flatten(),y.flatten(),d.data.flatten(),xi,yi,interp='linear')
-
-        # count = 0
-        # for icon in cons:
-
-        #     inner = False
-        #     if count > 0:
-        #         if cons[count-1] > icon:
-        #             inner = True
-            
-        #     fig = plt.figure(figsize=(10,5))
-        #     ax1 = fig.add_subplot(1,2,1)
-        #     ax1.contourf(reg_x,reg_y,d2)
-        #     xycon = ax1.contour(reg_x,reg_y,d2,[icon],colors='k')
-            
-        #     latloncon = []
-        #     for icon in range(len(xycon.allsegs[0])):
-        #         ilons, ilats = pa(xycon.allsegs[0][icon][:,0],xycon.allsegs[0][icon][:,1],inverse=True)
-        #         ilons = ilons % 360
-        #         latloncon.append(np.vstack((ilons,ilats)).T)
-                
-            
-        #     if len(latloncon) == 1:
-        #         a = latloncon[0]
-        #     else:
-        #         print('more than one contour')
-        #         lens = np.zeros(len(latloncon))
-        #         for iicon in range(len(latloncon)):
-        #             lens[iicon] = self.calc_con_len(latloncon[iicon])
-        #         if inner:
-        #             # 2nd longest contour
-        #             a = latloncon[np.where(lens == np.sort(lens)[-2])[0][0]]
-        #         else:
-        #             a = latloncon[np.argmax(lens)]
-
-        #     a = a[:-1,:]
-        #     #lon, lat = pa(a[:,0],a[:,1],inverse=True)
-        #     #lon = lon % 360
-
-        #     #a[:,0] = lon
-        #     #a[:,1] = lat
-        #     # if a[0,0] > a[1,0]:
-        #     #     a = a[::-1,:]
-            
-        #     if plot:
-        #         lats = d.coords['latitude'].data
-        #         lons = d.coords['longitude'].data
-        #         #ax1.plot(a[:,0],a[:,1],color='red')
-        #         ax2 = fig.add_subplot(1,2,2,projection=ccrs.NorthPolarStereo())
-        #         theta = np.linspace(0, 2*np.pi, 100)
-        #         center, radius = [0.5, 0.5], 0.5
-        #         verts = np.vstack([np.sin(theta), np.cos(theta)]).T
-        #         circle = mpath.Path(verts * radius + center)
-        #         ax2.set_boundary(circle, transform=ax2.transAxes)
-        #         ax2.set_extent([-180, 180,20, 90], ccrs.PlateCarree())
-        #         ax2.gridlines()
-        #         cyclic_data, cyclic_lons = cartopy.util.add_cyclic_point(d.data, coord = lons) ##
-        #         con1 = ax2.contourf(cyclic_lons, lats, cyclic_data, transform=ccrs.PlateCarree())
-        #         con = ax2.contour(cyclic_lons, lats, cyclic_data,[icon],colors='k', transform=ccrs.PlateCarree())
-        #         ax2.plot(a[:,0],a[:,1], transform=ccrs.Geodetic(), color='red')
-        #         plt.show()
-        #     else:
-        #         plt.close()
-
-        #     if inner:
-        #         filename = self.working_dir+'contours/%s_%.7f_tstep_%s_inner.in' % (con_var,icon,self.start_time)
-        #     else:
-        #         filename = self.working_dir+'contours/%s_%.7f_tstep_%s.in' % (con_var,icon,self.start_time)
-
-        #     with open(filename, "w") as csvfile:
-        #         csvfile.write("Contour Advection with Surgery\n")
-        #         csvfile.write("%s %.4f contour\n" % (con_var,icon))
-        #         csvfile.write("\n")
-        #         csvfile.write("%s  24  %.7f  %.7f  0.10000000  0.0000000\n" % (self.ndays,self.time_step,self.time_step))
-        #         csvfile.write("1 %s 0.00000\n" % a.shape[0])
-        #         csvfile.write("%s %d %d 1.00000\n" % (a.shape[0], a[0,0], a[0,1]))
-
-        #     with open(filename, "a") as csvfile:
-        #         writer = csv.writer(csvfile, delimiter=' ')
-        #         for irow in range(a.shape[0]):
-        #             writer.writerow(a[irow,:])
-            
-        #     count += 1
