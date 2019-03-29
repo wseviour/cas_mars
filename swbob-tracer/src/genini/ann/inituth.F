@@ -58,12 +58,12 @@ c     rks - tracer=1 between 30S and 30N, tracer=0 elsewhere:
          snlat=sinlat(j)
          cslat=cosinelat(j)
 c     wjms - changing to a sin(lat) initial tracer distribution
-         sigini(j) = 0.d0
+c         sigini(j) = 0.d0
 c     if (abs(snlat).le.0.5d0) sigini(j) = 1.d0
-         tracer_min = 40.d0*dtor
-         tracer_max = 55.d0*dtor
-      if ((rlat(j).ge.tracer_min) .and. (rlat(j).le.tracer_max)) sigini(j) = 1.d0
-c     sigini(j) = snlat
+c         tracer_min = 40.d0*dtor
+c         tracer_max = 55.d0*dtor
+c      if ((rlat(j).ge.tracer_min) .and. (rlat(j).le.tracer_max)) sigini(j) = 1.d0
+         sigini(j) = snlat
 c     wjms - trying a smoother distribution
 c         sigini(j) = cslat**4.d0
       enddo

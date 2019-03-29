@@ -115,7 +115,8 @@ c      ramp=(dsin( (time_current/rampdays)*pi/2.d0 ) )**2
 #endif
 
 c     rks - weaken hyperdiffusion on tracer by factor trfac:
-      trfac=0.1d0
+c     trfac=0.1d0
+      trfac=1.0d0
       
       do k=1,plev
 

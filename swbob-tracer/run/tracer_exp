@@ -115,7 +115,7 @@ if ( $icn == ann ) then
     set dlat=-1.0    # -ve to indicate read theq from ic.dat
     set ueq0=0.0
     #set kt=0.0
-    set kt=0.4 #- wjms
+    set kt=2.0 #- wjms
 
 # momentum relaxation:
 #    set dlatm=-10.0    # -ve to indicate read ueq from ic.dat
@@ -129,7 +129,7 @@ if ( $icn == ann ) then
     set s5=`echo $kv | sed -e s/'\.'//`
 #    set label=${icn}${s1}${s2}-kt${s4}-kv${s5}
 #    set label=${icn}-urlxSH-kt${s4}-kv${s5}
-    set label=${icn}${iclat1}-${iclat2}-nu4-urlx-kt${kt}-ring
+    set label=${icn}${iclat1}-${iclat2}-nu4-urlx-kt${kt}-sinlat-trfac1
 
 endif
 

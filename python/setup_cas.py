@@ -471,17 +471,17 @@ class Cas:
         ax.set_boundary(circle, transform=ax.transAxes)
         ax.set_extent([-180, 180,30, 90], ccrs.PlateCarree())
         ax.gridlines()
-        cyclic_data, cyclic_lons = cartopy.util.add_cyclic_point(self.ds.q[start_time+int(plot_day/self.time_step),:].data, coord = lons)
+        cyclic_data, cyclic_lons = cartopy.util.add_cyclic_point(self.ds.q[self.start_time+int(plot_day/self.time_step),:].data, coord = lons)
         pv = ax.contourf(cyclic_lons, lats,cyclic_data, cmap='Blues', transform=ccrs.PlateCarree(),extend='both')
         for key in cons.keys():
-            con = cons[key][int(plot_day/time_step)]
+            con = cons[key][int(plot_day/self.time_step)]
             con = np.append(con, con[0,:][np.newaxis,:],axis=0)
             ax.plot(con[:,0], con[:,1], transform=ccrs.Geodetic(),color='k')
         ax.set_title('day '+str(plot_day))
         plt.show()
         
         
-def read_MarsWRF(level=0):
+def read_MarsWRF(level=None):
     """
     Read MarsWRF data at a given theta level, return a xarray Dataset
     """
@@ -493,8 +493,7 @@ def read_MarsWRF(level=0):
     theta = ds_raw.THETA[0,:]
     l_s = ds_raw.L_S
 
-    print('Reading MarsWRF data at theta = '+str(theta.data[level]))
-    
+        
     U = ds_raw.U.data
     V = ds_raw.V.data
     EPV = ds_raw.EPV.data
@@ -509,8 +508,8 @@ def read_MarsWRF(level=0):
                                'theta':('theta',theta),
                                'latitude':('latitude',lat),
                                'longitude':('longitude',lon)})
-
-    ds = ds.isel(theta=level) # Select given level
+    if level:
+        ds = ds.isel(theta=level) # Select given level
     ds = ds.sel(latitude=slice(0,90))
     ds = ds.sortby('latitude',ascending=False)
 
@@ -526,25 +525,25 @@ if __name__ == '__main__':
 
 
     ############# SWM test ############
-    run_name = 'ann57.-70.-nu4-urlx-kt2.0-ring.c-0020.T85.nc'
+    # run_name = 'ann57.-70.-nu4-urlx-kt2.0-ring.c-0020.T85.nc'
 
-    ds = xr.open_dataset('../model_output/netcdf/'+run_name)
+    # ds = xr.open_dataset('../model_output/netcdf/'+run_name)
 
-    working_dir = '../model_output/cas/'+run_name+'/'
-    if os.path.isdir(working_dir):
-        pass
-    else:
-        os.system('mkdir '+working_dir)
-
-    ############# MarsWRF test ###############
-    # level = 6
-    # ds = read_MarsWRF(level=level)
-
-    # working_dir = '../MarsWRF_data/cas/Z%.2d/' % level
+    # working_dir = '../model_output/cas/'+run_name+'/'
     # if os.path.isdir(working_dir):
     #     pass
     # else:
     #     os.system('mkdir '+working_dir)
+
+    ############# MarsWRF test ###############
+    level = 6
+    ds = read_MarsWRF(level=level)
+
+    working_dir = '../MarsWRF_data/cas/Z%.2d/' % level
+    if os.path.isdir(working_dir):
+        pass
+    else:
+        os.system('mkdir '+working_dir)
         
         
 
@@ -552,6 +551,6 @@ if __name__ == '__main__':
     CA.interpolate_winds()
     CA.make_contours2(lats=np.arange(50,86,2),plot=False)
     CA.run_cas()
-
+    len_rates = CA.len_rate_eqlat()
     CA.plot_cas(0)
 
