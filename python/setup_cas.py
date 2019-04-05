@@ -87,11 +87,14 @@ class Cas:
             print('no exponential fit')
             return 0.0
 
-    def interpolate_winds(self):
+    def interpolate_winds(self,length=None):
         """
         Interpolate winds and write to text file for input into CAS routine
         """
-        nsteps = int(self.ndays/self.time_step)
+        if length:
+            nsteps = length
+        else:
+            nsteps = int(self.ndays/self.time_step)
 
         # Resolution for cas winds
         nlon = 144
@@ -245,7 +248,8 @@ class Cas:
         d = self.ds[con_var].sel(latitude = slice(90,20))[self.start_time,:]
         
         # Find contour levels by interpolation at lon=0
-        cons = d.mean(dim = 'longitude').interp(latitude=lats).data
+        #cons = d.mean(dim = 'longitude').interp(latitude=lats).data
+        cons = d.isel(longitude=10).interp(latitude=lats).data
         print(cons)
         pa = Proj("+proj=stere +lat_0=90",preserve_units=True)
         lonv, latv = np.meshgrid(d.longitude.data, d.latitude.data)
@@ -472,16 +476,16 @@ class Cas:
         ax.set_extent([-180, 180,30, 90], ccrs.PlateCarree())
         ax.gridlines()
         cyclic_data, cyclic_lons = cartopy.util.add_cyclic_point(self.ds.q[self.start_time+int(plot_day/self.time_step),:].data, coord = lons)
-        pv = ax.contourf(cyclic_lons, lats,cyclic_data, cmap='Blues', transform=ccrs.PlateCarree(),extend='both')
+        pv = ax.contourf(cyclic_lons, lats,cyclic_data, 21,cmap='Blues', transform=ccrs.PlateCarree(),extend='both')
         for key in cons.keys():
             con = cons[key][int(plot_day/self.time_step)]
-            con = np.append(con, con[0,:][np.newaxis,:],axis=0)
+            #con = np.append(con, con[0,:][np.newaxis,:],axis=0)
             ax.plot(con[:,0], con[:,1], transform=ccrs.Geodetic(),color='k')
         ax.set_title('day '+str(plot_day))
         plt.show()
         
         
-def read_MarsWRF(level=None):
+def read_MarsWRF_old(level=None):
     """
     Read MarsWRF data at a given theta level, return a xarray Dataset
     """
@@ -516,34 +520,67 @@ def read_MarsWRF(level=None):
     return ds
 
 
+def read_MarsWRF(level=None):
+    """
+    Read MarsWRF data at a given theta level, return a xarray Dataset
+    """
+    ds_raw = xr.open_mfdataset('../MarsWRF_data/isentropic_surface_data_ls*.nc', concat_dim='Time')
+    lat = ds_raw.LAT[0,:,0]
+    lon = ds_raw.LON[0,0,:] % 360 # make sure in 0-360 format, not -180-180
+    lon = np.append(lon[90:],lon[:90])
+    theta = ds_raw.THETA[0,:]
+    time = ds_raw.Time.data
+
+        
+    U = ds_raw.U.data
+    V = ds_raw.V.data
+    EPV = ds_raw.EPV.data
+    U = np.append(U[:,:,:,90:],U[:,:,:,:90], axis=3)
+    V = np.append(V[:,:,:,90:],V[:,:,:,:90], axis=3)
+    EPV = np.append(EPV[:,:,:,90:],EPV[:,:,:,:90], axis=3)            
+
+    ds = xr.Dataset({'u':(['time','theta','latitude','longitude'], U),
+                     'v':(['time','theta','latitude','longitude'], V),
+                     'q':(['time','theta','latitude','longitude'], EPV)},
+                     coords = {'time':('time',time),
+                               'theta':('theta',theta),
+                               'latitude':('latitude',lat),
+                               'longitude':('longitude',lon)})
+    if level:
+        ds = ds.isel(theta=level) # Select given level
+    ds = ds.sel(latitude=slice(0,90))
+    ds = ds.sortby('latitude',ascending=False)
+
+    return ds
+
 if __name__ == '__main__':
 
 
     ndays = 10 # number days for CAS calculation
-    start_time = 200 # starting time step of CAS
+    start_time = 500 # starting time step of CAS
     time_step= 0.25 # time step in model (should be 0.25 for MarsWRF)
 
 
     ############# SWM test ############
-    # run_name = 'ann57.-70.-nu4-urlx-kt2.0-ring.c-0020.T85.nc'
+    run_name = 'ann57.-70.-nu4-urlx-kt1.0-sinlat-trfac1.c-0020sat200.0.T170.nc'
 
-    # ds = xr.open_dataset('../model_output/netcdf/'+run_name)
+    ds = xr.open_dataset('../model_output/netcdf/'+run_name)
 
-    # working_dir = '../model_output/cas/'+run_name+'/'
-    # if os.path.isdir(working_dir):
-    #     pass
-    # else:
-    #     os.system('mkdir '+working_dir)
-
-    ############# MarsWRF test ###############
-    level = 6
-    ds = read_MarsWRF(level=level)
-
-    working_dir = '../MarsWRF_data/cas/Z%.2d/' % level
+    working_dir = '../model_output/cas/'+run_name+'/'
     if os.path.isdir(working_dir):
         pass
     else:
         os.system('mkdir '+working_dir)
+
+    ############# MarsWRF test ###############
+    # level = 6
+    # ds = read_MarsWRF(level=level)
+
+    # working_dir = '../MarsWRF_data/cas/Z%.2d/' % level
+    # if os.path.isdir(working_dir):
+    #     pass
+    # else:
+    #     os.system('mkdir '+working_dir)
         
         
 

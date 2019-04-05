@@ -16,7 +16,9 @@ else:
 
 PATH = '../model_output/raw/'
 
-ds = ds_from_BOB(PATH+ext, ['q','s','u','v','h'], 85, time_step=0.25) 
+res = int(ext.split('T')[-1])
+
+ds = ds_from_BOB(PATH+ext, ['q','s','u','v','h'], res, time_step=0.25) 
 
 ds.to_netcdf(PATH.split('raw')[0]+'netcdf/'+ext+'.nc')
 

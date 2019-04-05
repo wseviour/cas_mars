@@ -19,7 +19,7 @@ def pstere_proj(ds,timestep=600):
 
     return d2, xi, yi
 
-def calc_keff(c, dx, dy, rac, timestep, ds, lats=np.linspace(50,85,30)):
+def calc_keff(c, dx, dy, rac, timestep, ds, lats=np.linspace(30,88,2)):
    
     R = 6371.e3
 
@@ -63,18 +63,31 @@ def calc_keff(c, dx, dy, rac, timestep, ds, lats=np.linspace(50,85,30)):
 
 if __name__ == '__main__':
 
-    kt = ['0.0','1.0','2.0']
+    kt = ['2.0']#['0.0','0.4','1.0','2.0']#['0.0','1.0','2.0']
+    dq = ['','-dq20.2']
+    lat = [65]
+    res = 170
     fig = plt.figure()
-    ax1 = fig.add_subplot(211)
-    ax2 = fig.add_subplot(212)
+    ax1 = fig.add_subplot(111)
+    ax2 = ax1.twinx()
+    #ax2 = fig.add_subplot(212)
 
-    for ikt in kt:
+    FILES = ['ann57.-70.-nu4-urlx-kt2.0-sinlat-trfac1-dq20.2.c-0020sat200.0.T85.nc',
+             'ann57.-70.-nu4-urlx-kt2.0-sinlat-trfac1.c-0020.T85.nc',
+             #'ann57.-70.-nu4-urlx-kt2.0-sinlat-trfac1-dq21.0.c-0020sat200.0.T85.nc'
+            ]
+
+    titles = ['$q_p = 0.2 \cdot 2\Omega/H$','$q_p = 0.7 \cdot 2\Omega/H$','$q_p = 2\Omega/H$']
+
+    ls = ['--','-',':']
     
-        FILE = '/home/bridge/kz18101/Research/cas_mars/model_output/netcdf/ann57.-70.-nu4-urlx-kt%s-sinlat.c-0020.T85.nc' % ikt
+    for ifile in FILES:
+    
+        FILE = '/home/bridge/kz18101/Research/cas_mars/model_output/netcdf/'+ifile
 
-        timesteps = range(700,710)
+        timesteps = range(500,550)
         #timesteps=[450]
-        lats = np.linspace(30,85,30)
+        lats = np.arange(30,88,2)
         #lats = [55]
         keffi = np.zeros((len(lats), len(timesteps)))
 
@@ -97,14 +110,18 @@ if __name__ == '__main__':
 
 
         keffi = np.ma.masked_array(keffi, mask = np.isnan(keffi))
-        ax1.plot(lats, np.ma.mean(keffi,axis=1),label=ikt)
-        ax2.plot(ds.coords['latitude'].data, ds.q.mean(dim='longitude')[timesteps[0]:timesteps[-1],:].mean(dim='time').data)
+        ax1.plot(lats, np.ma.mean(keffi,axis=1),color='k',ls=ls[FILES.index(ifile)],label=titles[FILES.index(ifile)])
+        ax2.plot(ds.coords['latitude'].data, ds.q.mean(dim='longitude')[timesteps[0]:timesteps[-1],:].mean(dim='time').data,color='r',ls=ls[FILES.index(ifile)])
         
     ax1.set_ylabel('$\kappa_{\mathrm{eff}}/\kappa$',fontsize=12)
     ax1.set_xlabel('$\phi_e$',fontsize=12)
-    ax1.set_xlim(50,90)
-    ax2.set_xlim(50,90)
-    ax2.set_ylim(0.3,1.9)
+    ax1.set_xlim(45,90)
+    #ax2.set_xlim(40,90)
+    ax1.set_ylim(1,30)
+    ax2.set_ylim(0.0,1.9)
+    ax2.tick_params('y',colors='red')
+    ax2.set_ylabel('PV [$2\Omega/H$]')
     ax1.legend()
+    plt.savefig('../plots/for_paper/keff.pdf')
     plt.show()
 

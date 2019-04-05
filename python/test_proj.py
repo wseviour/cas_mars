@@ -12,7 +12,7 @@ import matplotlib.path as mpath
 d = xr.open_dataset('/home/bridge/kz18101/Research/cas_mars/model_output/netcdf/ann57.-70.-nu4-urlx-kt5.0-hat.c-0020.T85.nc').q
 d = d.sel(latitude = slice(90,20))
 
-pa = Proj("+proj=stere +lat_0=90 +lon_0=0")
+pa = Proj("+proj=stere +lat_0=90")
 lonv, latv = np.meshgrid(d.longitude.data, d.latitude.data)
 x, y = pa(lonv,latv)
 

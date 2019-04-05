@@ -91,14 +91,14 @@ if ( $icn == ann ) then
 
     set iclat0=0.
     set iclat1=57.
-    set iclat11=60
+    set iclat11=60.
     set iclat2=70. #62.- wjms
-    set iclat21=73
+    set iclat21=73.
 # q scaled by polar coriolis / hbar
     set dq1=1.3
     set dq0=0.29327275    # for dq1=1, wd=0.04, wde=3*wd
     #set dq0=0.2660254 # wjms
-    set dq2=0.7 # fraction of 2om/H for poleward side of vortex - wjms
+    set dq2=0.2 # 0.7 # fraction of 2om/H for poleward side of vortex - wjms
 # set dq0=0.254699    # for dq1=1.5, wd=0.04, wde=3*wd
     set alpha=0.5
     #set alpha=0.05 # wjms
@@ -129,7 +129,7 @@ if ( $icn == ann ) then
     set s5=`echo $kv | sed -e s/'\.'//`
 #    set label=${icn}${s1}${s2}-kt${s4}-kv${s5}
 #    set label=${icn}-urlxSH-kt${s4}-kv${s5}
-    set label=${icn}${iclat1}-${iclat2}-nu4-urlx-kt${kt}-sinlat-trfac1
+    set label=${icn}${iclat1}-${iclat2}-nu4-urlx-kt${kt}-hat-trfac1-dq20.2
 
 endif
 
@@ -227,13 +227,13 @@ set ampm=$usb
 
 if ( $sat == 1 ) then
 #    set tsat=400
-    set tsat=100.0 #trying to turn off topography- wjms, 200 defualt
+    set tsat=200.0 #trying to turn off topography- wjms, 200 defualt
     set tfac=`echo "0.25*$tsat/1000" | bc -l`
     set ampt=`echo "$tfac*$hbar*$gravity" | bc -l`
     set mt=2
 #    set latt=0.0
     set latt=-90.0   # global topography - label GT
-#    set cstr=${cstr}sat${tsat}
+    set cstr=${cstr}sat${tsat}
 endif
 
 set jobname=${label}.c${cstr}.T${res}
